@@ -18,12 +18,15 @@ local rows = {}
 local header = {} -- list of {text, keep}; parts with a lower `keep` are dropped first on narrow screens
 local footer = ""
 local footerShort = "" -- used when the full key help doesn't fit
+local footerTiny = "" -- used when the short key help doesn't fit either
 local showRecent = true -- false: no recent log panel, the table uses the whole screen
 local page = 1 -- which page of the table is shown when it has more rows than fit
 
 -- "fit": set the resolution so the rows fill the screen with text as large as possible
 -- "columns": keep the resolution and put the rows in side-by-side tables when there is room
 -- "fixed": keep the resolution, one table
+-- "tall": like "fit", with narrow columns and short status words, for screens that
+--         are taller than wide
 local layoutMode = "fit"
 local originalResolution = nil -- {width, height} before the maintainer changed it
 local screenRatio = nil -- resolution width per line of height that fills the screen exactly
@@ -39,15 +42,38 @@ local COLORS = {
     blue = 0x55AAFF,
 }
 
-local STATUS_WIDTH = 15 -- fits "waiting for CPU"
-local MIN_NAME_WIDTH = 16
 local MAX_NAME_WIDTH = 50 -- so the numbers stay next to the names on wide screens
-local NUMBER_COLUMNS = {{title = "Stock", key = "stock", width = 8}, {title = "Want", key = "want", width = 8},
-    {title = "Batch", key = "batch", width = 7}}
-local ALL_COLUMNS_WIDTH = STATUS_WIDTH + 2 + 9 + 9 + 8 -- everything except the name
-local MIN_TABLE_WIDTH = 20 + ALL_COLUMNS_WIDTH -- narrowest side-by-side table ("columns")
-local MIN_SCREEN_WIDTH = 50 -- the short key help and a compact header fit
 local TABLE_GAP = " | "
+
+-- Column sizes. status: the row field shown in the Status column; statusGap: spaces
+-- before it; minScreen: narrowest resolution "fit" / "tall" picks
+local WIDE = {
+    status = "status", statusWidth = 15, statusGap = 2, -- fits "waiting for CPU"
+    minName = 16, minScreen = 50, -- the short key help and a compact header fit
+    numbers = {{title = "Stock", key = "stock", width = 8}, {title = "Want", key = "want", width = 8},
+        {title = "Batch", key = "batch", width = 7}},
+}
+local NARROW = {
+    status = "shortStatus", statusWidth = 10, statusGap = 1, -- fits "no pattern"
+    minName = 12, minScreen = 30,
+    numbers = {{title = "Stock", key = "stock", width = 6}, {title = "Want", key = "want", width = 6},
+        {title = "Batch", key = "batch", width = 6}},
+}
+
+-- Width of everything in a row except the name
+local function fixedWidth(style)
+    local used = style.statusWidth + style.statusGap
+    for _, column in ipairs(style.numbers) do
+        used = used + column.width + 1
+    end
+    return used
+end
+
+local MIN_TABLE_WIDTH = 20 + fixedWidth(WIDE) -- narrowest side-by-side table ("columns")
+
+local function currentStyle()
+    return layoutMode == "tall" and NARROW or WIDE
+end
 
 -- Pads or cuts text to exactly `width` characters (cut text ends with "~")
 local function fit(text, width)
@@ -80,6 +106,10 @@ local function areas(height)
         return 0, nil, math.max(1, height - 3)
     end
     local logLines = math.max(3, math.floor(height * 0.3))
+    if layoutMode ~= "columns" then
+        -- Table lines no row needs go to the recent panel
+        logLines = logLines + math.max(0, height - 4 - logLines - #rows)
+    end
     local separatorY = height - 1 - logLines
     return logLines, separatorY, math.max(1, separatorY - 3)
 end
@@ -121,41 +151,46 @@ end
 
 -- Number columns that fit next to a readable name. On narrow tables Batch is
 -- dropped first, then Want, then Stock. Returns the name width and the columns.
-local function columnsFor(width)
+local function columnsFor(width, style)
     local columns = {}
-    for _, column in ipairs(NUMBER_COLUMNS) do
+    for _, column in ipairs(style.numbers) do
         table.insert(columns, column)
     end
     while true do
-        local used = STATUS_WIDTH + 2
+        local used = style.statusWidth + style.statusGap
         for _, column in ipairs(columns) do
             used = used + column.width + 1
         end
-        if width - used >= MIN_NAME_WIDTH or #columns == 0 then
+        if width - used >= style.minName or #columns == 0 then
             return math.max(8, math.min(MAX_NAME_WIDTH, width - used)), columns
         end
         table.remove(columns)
     end
 end
 
-local function formatRow(nameWidth, columns, row)
+local function formatRow(nameWidth, columns, row, style)
     local line = fit(row.name, nameWidth)
     for _, column in ipairs(columns) do
         line = line .. " " .. fitRight(row[column.key], column.width)
     end
-    return line .. "  " .. row.status
+    return line .. string.rep(" ", style.statusGap) .. tostring(row[style.status] or row.status or "")
 end
 
--- The resolution for layout "fit": the smallest one (so the largest text) that shows
--- every row, in the shape of the screen so the text fills it edge to edge.
+-- The resolution for layouts "fit" and "tall": the smallest one (so the largest text)
+-- that shows every row, in the shape of the screen so the text fills it edge to edge.
+-- "fit" makes room for the whole name; "tall" only for a short one and gives the name
+-- whatever width the screen's shape leaves over.
 local function fitResolution()
     local maxWidth, maxHeight = gpu.maxResolution()
     local ratio = screenRatio or (maxWidth / maxHeight)
-    local longest = MIN_NAME_WIDTH
-    for _, row in ipairs(rows) do
-        longest = math.max(longest, unicode.len(row.name))
+    local style = currentStyle()
+    local nameWidth = style.minName
+    if style == WIDE then
+        for _, row in ipairs(rows) do
+            nameWidth = math.max(nameWidth, math.min(unicode.len(row.name), MAX_NAME_WIDTH))
+        end
     end
-    local needWidth = math.max(MIN_SCREEN_WIDTH, math.min(longest, MAX_NAME_WIDTH) + ALL_COLUMNS_WIDTH)
+    local needWidth = math.min(maxWidth, math.max(style.minScreen, nameWidth + fixedWidth(style)))
     for height = 5, maxHeight do
         local _, _, tableRows = areas(height)
         local width = math.min(maxWidth, math.floor(height * ratio))
@@ -163,7 +198,9 @@ local function fitResolution()
             return width, height
         end
     end
-    return maxWidth, maxHeight
+    -- More rows than fit on one page, or a screen too narrow for the columns: all
+    -- lines, as wide as the screen's shape allows but at least wide enough for them
+    return math.min(maxWidth, math.max(needWidth, math.floor(maxHeight * ratio))), maxHeight
 end
 
 local function setResolution(width, height)
@@ -173,10 +210,10 @@ local function setResolution(width, height)
     end
 end
 
--- Puts the screen in the resolution the layout wants: fitted for "fit", the
--- resolution from before the maintainer started for the others
+-- Puts the screen in the resolution the layout wants: fitted for "fit" and "tall",
+-- the resolution from before the maintainer started for the others
 local function applyResolution()
-    if layoutMode == "fit" then
+    if layoutMode == "fit" or layoutMode == "tall" then
         setResolution(fitResolution())
     elseif originalResolution then
         setResolution(originalResolution[1], originalResolution[2])
@@ -235,19 +272,20 @@ end
 
 -- Draws one table of rows starting at column x
 local function drawSubTable(x, tableWidth, tableRows, pageRows, setColor, colors)
-    local nameWidth, columns = columnsFor(tableWidth)
+    local style = currentStyle()
+    local nameWidth, columns = columnsFor(tableWidth, style)
     local stockOffset, stockWidth = stockColumn(nameWidth, columns)
-    local titles = {name = "Name", status = "Status"}
+    local titles = {name = "Name", [style.status] = "Status"}
     for _, column in ipairs(columns) do
         titles[column.key] = column.title
     end
     setColor("gray")
-    gpu.set(x, 2, fit(formatRow(nameWidth, columns, titles), tableWidth))
+    gpu.set(x, 2, fit(formatRow(nameWidth, columns, titles, style), tableWidth))
     for i = 1, tableRows do
         local row = pageRows[i]
         if row then
             setColor(row.color)
-            gpu.set(x, 2 + i, fit(formatRow(nameWidth, columns, row), tableWidth))
+            gpu.set(x, 2 + i, fit(formatRow(nameWidth, columns, row, style), tableWidth))
             -- A stock value that wasn't read this cycle is redrawn in gray
             if row.stockFrozen and colors and stockOffset and stockOffset + stockWidth <= tableWidth then
                 setColor("gray")
@@ -316,13 +354,17 @@ local function drawLog()
             gpu.fill(1, y, width, 1, " ")
         end
     end
-    local keys, keysShort = footer, footerShort
+    local keys, keysShort, keysTiny = footer, footerShort, footerTiny
     if pageCount(width, tableRows) > 1 then
         keys = keys .. "  PgUp/PgDn page"
         keysShort = keysShort .. "  PgUp/PgDn"
+        keysTiny = keysTiny .. "  PgUp/Dn"
     end
     if unicode.len(keys) > width then
         keys = keysShort
+    end
+    if unicode.len(keys) > width then
+        keys = keysTiny
     end
     setColor("gray")
     gpu.set(1, height, fit(keys, width))
@@ -444,9 +486,9 @@ function Display.setShowRecent(show)
     end
 end
 
--- "fit", "columns" or "fixed" (anything else counts as "fit")
+-- "fit", "tall", "columns" or "fixed" (anything else counts as "fit")
 function Display.setLayout(mode)
-    if mode ~= "columns" and mode ~= "fixed" then
+    if mode ~= "columns" and mode ~= "fixed" and mode ~= "tall" then
         mode = "fit"
     end
     if mode ~= layoutMode then
@@ -498,13 +540,15 @@ function Display.endBatch()
     drawAll()
 end
 
--- rows: list of {name, stock, want, batch, status, color}; header: see Display.setHeader;
--- footer / footerShort: key help, the short one for narrow screens
-function Display.update(newRows, newHeader, newFooter, newFooterShort)
+-- rows: list of {name, stock, want, batch, status, shortStatus, color}; header: see
+-- Display.setHeader; footer / footerShort / footerTiny: key help, the shorter ones
+-- for narrower screens
+function Display.update(newRows, newHeader, newFooter, newFooterShort, newFooterTiny)
     rows = newRows
     header = headerParts(newHeader)
     footer = newFooter or ""
     footerShort = newFooterShort or footer
+    footerTiny = newFooterTiny or footerShort
     if not batching then
         drawAll()
     end

@@ -61,6 +61,9 @@ settings.showRecent = true
 --   "columns" - keeps the resolution and puts the rows in side-by-side tables when
 --               the screen is wide enough.
 --   "fixed"   - keeps the resolution, one table.
+--   "tall"    - like "fit", but with narrow number columns and short status words
+--               ("no CPU", "no pattern"), for screens that are taller than wide
+--               (e.g. 2x3 or 1x2 blocks). Long names are cut to fit.
 settings.layout = "fit"
 
 -- How the header counts crafting CPUs: "free" = idle CPUs ("CPUs free: 9/11"),

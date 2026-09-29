@@ -17,6 +17,7 @@ local SETTINGS_PATH = findFile("settings")
 local STARTUP_CHECK = 2 -- seconds between checks while waiting for a broken config.lua to be fixed
 local KEY_HELP = "E edit config  S edit settings  R reload  Q quit"
 local KEY_HELP_SHORT = "E config  S settings  R reload  Q quit"
+local KEY_HELP_TINY = "E/S edit  R reload  Q quit"
 
 -- Runs a Lua file that returns a table. Returns the table, or nil and an error message.
 local function loadTable(path)
@@ -232,13 +233,14 @@ local function formatAmount(n)
     end
 end
 
+-- Status text, color and the short text for settings.layout = "tall"
 local STATUS_TEXT = {
     crafting = {"crafting", "blue"},
     requested = {"requested", "yellow"},
     stocked = {"stocked", "green"},
-    nocpu = {"waiting for CPU", "orange"},
+    nocpu = {"waiting for CPU", "orange", "no CPU"},
     retry = {"failed", "red"}, -- the retry time is in the log line
-    missing = {"not craftable", "red"},
+    missing = {"not craftable", "red", "no pattern"},
     error = {"error", "red"},
 }
 
@@ -287,6 +289,7 @@ local function render(title)
             want = formatAmount(entry.config[1]),
             batch = formatAmount(entry.config[2]),
             status = look[1],
+            shortStatus = look[3] or look[1],
             color = look[2],
             problem = PROBLEM[status] == true,
         })
@@ -297,7 +300,7 @@ local function render(title)
         end
         return a.name < b.name
     end)
-    display.update(rows, title or headerParts(), KEY_HELP, KEY_HELP_SHORT)
+    display.update(rows, title or headerParts(), KEY_HELP, KEY_HELP_SHORT, KEY_HELP_TINY)
 end
 
 local function sameEntry(a, b)
