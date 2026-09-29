@@ -375,7 +375,8 @@ local function drawLog()
     setColor("white")
 end
 
-local failed = false -- the table broke once; stay with the scrolling log from then on
+local failed = false -- the table broke; stay with the scrolling log until Display.retry()
+local failReason = nil
 
 local function restoreResolution()
     if gpu and originalResolution then
@@ -389,12 +390,13 @@ local function guarded(draw)
     local ok, err = pcall(draw)
     if not ok then
         failed = true
+        failReason = tostring(err)
         active = false
         setLogHandler(nil)
         pcall(restoreResolution)
         pcall(term.clear)
         pcall(term.setCursorBlink, true)
-        print("WARNING: the status table failed (" .. tostring(err) .. "); showing a scrolling log instead.")
+        print("WARNING: the status table failed (" .. failReason .. "); showing a scrolling log instead. Press R to try it again.")
     end
 end
 
@@ -506,6 +508,21 @@ end
 
 function Display.isActive()
     return active
+end
+
+-- Why the table stopped working, or nil if it didn't
+function Display.failure()
+    return failReason
+end
+
+-- Lets Display.start() try the table again after it failed. Returns true if it had failed.
+function Display.retry()
+    if not failed then
+        return false
+    end
+    failed = false
+    failReason = nil
+    return true
 end
 
 -- While another program uses the screen (e.g. edit), nothing is drawn and the

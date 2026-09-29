@@ -2,6 +2,11 @@ local computer = require("computer")
 local event = require("event")
 local filesystem = require("filesystem")
 local shell = require("shell")
+-- require keeps modules until a reboot; load them fresh so an update or an earlier
+-- status table failure doesn't carry over into this run
+for _, name in ipairs({"src.AE2", "src.Display", "src.Utility"}) do
+    package.loaded[name] = nil
+end
 local ae2 = require("src.AE2")
 local display = require("src.Display")
 require("src.Utility") -- defines logInfo, setLogHandler, setTimeOffset and currentTime
@@ -71,7 +76,12 @@ local function updateDisplayMode()
     local wantTable = settings.display ~= "log"
     if wantTable and not display.isActive() then
         if not display.start() and not warnedNoTable then
-            logInfo("WARNING: the status table can't be shown (no graphics card, or it failed); showing a scrolling log.")
+            local reason = display.failure()
+            if reason then
+                logInfo("WARNING: the status table failed (" .. reason .. "); showing a scrolling log. Press R to try it again.")
+            else
+                logInfo("WARNING: the status table can't be shown (no graphics card); showing a scrolling log.")
+            end
             warnedNoTable = true
         end
     elseif not wantTable and display.isActive() then
@@ -509,7 +519,12 @@ local function waitForNextCycle()
         if (tonumber(settings.reloadCheck) or 0) > 0 then
             wake = math.min(deadline, nextReloadCheck)
         end
-        if idle(math.max(0, wake - computer.uptime())) then
+        local action = idle(math.max(0, wake - computer.uptime()))
+        if action then
+            if action == "reload" and display.retry() then
+                warnedNoTable = false
+                updateDisplayMode()
+            end
             if not reloadIfChanged() then
                 logInfo("config.lua and settings.lua are unchanged.")
             end
