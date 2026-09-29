@@ -23,13 +23,14 @@ local showRecent = true -- false: no recent log panel, the table uses the whole 
 local page = 1 -- which page of the table is shown when it has more rows than fit
 
 -- "fit": set the resolution so the rows fill the screen with text as large as possible
+--        (with the narrow columns of "tall" on a screen that is taller than wide)
 -- "columns": keep the resolution and put the rows in side-by-side tables when there is room
 -- "fixed": keep the resolution, one table
--- "tall": like "fit", with narrow columns and short status words, for screens that
---         are taller than wide
+-- "tall": like "fit", always with narrow columns and short status words
 local layoutMode = "fit"
 local originalResolution = nil -- {width, height} before the maintainer changed it
 local screenRatio = nil -- resolution width per line of height that fills the screen exactly
+local portrait = false -- the screen is more blocks high than wide
 
 local COLORS = {
     white = 0xFFFFFF,
@@ -72,7 +73,10 @@ end
 local MIN_TABLE_WIDTH = 20 + fixedWidth(WIDE) -- narrowest side-by-side table ("columns")
 
 local function currentStyle()
-    return layoutMode == "tall" and NARROW or WIDE
+    if layoutMode == "tall" or (layoutMode == "fit" and portrait) then
+        return NARROW
+    end
+    return WIDE
 end
 
 -- Pads or cuts text to exactly `width` characters (cut text ends with "~")
@@ -178,7 +182,7 @@ end
 
 -- The resolution for layouts "fit" and "tall": the smallest one (so the largest text)
 -- that shows every row, in the shape of the screen so the text fills it edge to edge.
--- "fit" makes room for the whole name; "tall" only for a short one and gives the name
+-- Wide columns make room for the whole name; narrow ones only for a short one and give the name
 -- whatever width the screen's shape leaves over.
 local function fitResolution()
     local maxWidth, maxHeight = gpu.maxResolution()
@@ -411,11 +415,13 @@ end
 -- 4.5/16 block border, with characters twice as tall as wide.
 local function measureScreen()
     screenRatio = nil
+    portrait = false
     local address = gpu.getScreen()
     if address then
         local ok, blocksWide, blocksHigh = pcall(component.invoke, address, "getAspectRatio")
         if ok and blocksWide and blocksHigh then
             screenRatio = 2 * (blocksWide - 4.5 / 16) / (blocksHigh - 4.5 / 16)
+            portrait = blocksHigh > blocksWide
         end
     end
 end

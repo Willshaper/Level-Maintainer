@@ -58,12 +58,12 @@ settings.showRecent = true
 --   "fit"     - changes the screen resolution so the rows fill the screen with the
 --               largest text that fits (matched to the screen's shape, e.g. 2x2 or
 --               3x2 blocks). The old resolution comes back when the maintainer stops.
+--               On a screen taller than wide it uses the narrow columns of "tall".
 --   "columns" - keeps the resolution and puts the rows in side-by-side tables when
 --               the screen is wide enough.
 --   "fixed"   - keeps the resolution, one table.
---   "tall"    - like "fit", but with narrow number columns and short status words
---               ("no CPU", "no pattern"), for screens that are taller than wide
---               (e.g. 2x3 or 1x2 blocks). Long names are cut to fit.
+--   "tall"    - like "fit", but always with narrow number columns and short status
+--               words ("no CPU", "no pattern"). Long names are cut to fit.
 settings.layout = "fit"
 
 -- How the header counts crafting CPUs: "free" = idle CPUs ("CPUs free: 9/11"),
