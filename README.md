@@ -53,34 +53,72 @@ Stop it by pressing Q, or holding Ctrl+Alt+C for a second. Crafts already sent t
 By default the screen shows a status table, redrawn every cycle:
 
 ```
-Level Maintainer   14:02:11   CPUs free: 2/8   Entries: 3   Next cycle in 7s
-Name                          Stock     Want   Batch  Status
-Blank Pattern                   385      256     512  stocked
-Fluorescent Dye                   -        -    1024  crafting
-Phthalic Acid                11.97M   10.00M   3.00M  stocked
--- Recent --------------------------------------------------
-[14:01:51] Requested Fluorescent Dye x 1024
+14:02:11   CPUs free: 7/8   Entries: 4   Next cycle in 7s
+Name                 Stock     Want   Batch  Status
+Tantalum Dust            -        -    2048  failed
+Blank Pattern          385      256     512  stocked
+Fluorescent Dye          -        -    1000  requested
+Phthalic Acid       11.97M   10.00M   3.00M  stocked
+-- Recent -----------------------------------------------
+[14:01:51] Requested Fluorescent Dye x 1000
+[14:01:51] Failed to request Tantalum Dust x 2048 (request
+           failed (missing resources?)), retrying in 60s
 E edit config  S edit settings  R reload  Q quit
 ```
 
-- **Stock** is shown for entries with a threshold (the maintainer only reads the stock when it has to compare it). Fluids are in mB. The stock isn't read while an entry is crafting, waiting to retry or waiting for a CPU; its last value is then shown in gray.
-- **Status** is one of: `stocked`, `crafting`, `requested`, `waiting for CPU`, `failed` (the Recent log says when it is retried), `not craftable`, `error`, or `waiting` before the entry's first check.
+The header shows the time, the crafting CPUs (`settings.cpuDisplay`), the number of entries and a countdown to the next cycle. On a narrow screen the less important parts are left out.
+
+**Columns**
+
+- **Stock**: the amount in the ME system, for entries with a threshold. Fluids are in mB. It isn't read while an entry is crafting, waiting to retry or waiting for a CPU; the last value is then shown in gray.
+- **Want**: the threshold, the first number in `config.lua`. `-` means the entry has no threshold (`nil`): the maintainer keeps one batch crafting at all times and never reads its stock, so Stock shows `-` too.
+- **Batch**: how many are requested at once, the second number in `config.lua`.
+- **Status**: what the entry is doing, in its row color:
+
+| Status | Color | Short word | Symbol |
+|---|---|---|---|
+| `stocked`: at or above the threshold | green | | `✓` |
+| `crafting`: already being crafted | blue | | `▶` |
+| `requested`: a craft was started this cycle | yellow | | `●` |
+| `waiting for CPU`: no free crafting CPU | orange | `no CPU` | `…` |
+| `failed`: the request failed; Recent says when it is retried | red | | `✗` |
+| `not craftable`: no pattern for it | red | `no pattern` | `?` |
+| `error`: something went wrong; see Recent | red | | `!` |
+| `waiting`: not checked yet | white | | `·` |
+
+The short words are used on screens taller than wide, the symbols with the `Symbol` column.
+
+`settings.columns` picks which columns are shown; see [Table columns](#table-columns). For example `"Name Stock Want Symbol"` on a 2x3 screen, with the Recent panel off:
+
+```
+Next cycle in 10s
+Name           Stock   Want
+Tantalum Dust      -      - ✗
+Blank Pattern    385    256 ✓
+Fluorescent ~      -      - ●
+Phthalic Acid 11.97M 10.00M ✓
+✓ stocked  ● requested
+✗ failed
+E/S edit  R reload  Q quit
+```
+
+Without a Status column, the line under the table explains the colors and symbols that appear in the table (`settings.legend = false` hides it).
+
+**Layout**
+
 - Rows that need attention (`failed`, `error`, `not craftable`) are listed first; the rest are alphabetical.
-- The header counts down to the next cycle.
-- Long lines in the Recent log wrap onto the next line instead of being cut off.
-- By default (`settings.screen = "fit"`) the maintainer picks the screen resolution itself, so the table fills the screen with text as large as possible; with few entries the text is big, with many it gets smaller. `"columns"` instead keeps the resolution and splits the rows into side-by-side tables on wide screens. On a screen that is taller than wide (e.g. 2x3 blocks) `"fit"` uses narrower columns and short status words, so the text can be larger; `"tall"` uses them on any screen.
-- `settings.columns` picks the columns, e.g. `"Name Percent Batch"` for a narrow screen; see [Table columns](#table-columns).
-- With a color GPU the rows are colored by status. If there are more entries than fit, the table has pages: the header shows `Page 1/3`, and Page Up/Down or the Up/Down arrows switch pages. `settings.showRecent = false` gives the table the whole screen.
+- By default (`settings.screen = "fit"`) the maintainer picks the screen resolution itself, so the table fills the screen with text as large as possible: with few entries or few columns the text is big, with many it gets smaller. On a screen taller than wide (e.g. 2x3 blocks) it uses narrower columns and the short status words. `"columns"` instead keeps the resolution and splits the rows into side-by-side tables on wide screens.
+- If there are more entries than fit, the table has pages: the header shows `Page 1/3`, and Page Up/Down or the Up/Down arrows switch pages.
+- The Recent panel shows the latest log lines; long lines wrap onto the next line. `settings.showRecent = false` gives the table the whole screen, and `settings.log` sets how much is logged.
+- `settings.screen = "log"` shows a plain scrolling log instead of the table.
 
-Set `settings.screen = "log"` for the plain scrolling log instead.
-
-Keys work while the maintainer waits between cycles (and while it waits at startup for an ME interface or a fixed `config.lua`):
+**Keys** work while the maintainer waits between cycles (and while it waits at startup for an ME interface or a fixed `config.lua`):
 
 | Key | What it does |
 |---|---|
 | E | Opens `config.lua` in the editor. Save with Ctrl+S, close with Ctrl+W; the maintainer reloads it and starts a new cycle. |
 | S | Same for `settings.lua`. |
-| R | Reloads `config.lua` and `settings.lua` if they were saved since they were last read (e.g. edited from your PC). |
+| R | Reloads `config.lua` and `settings.lua` if they were saved since they were last read (e.g. edited from your PC). If the status table stopped working, it also tries the table again. |
 | Q | Stops the maintainer. |
 | Page Up/Down, Up/Down arrows | Switch pages of the status table when it doesn't fit on the screen. |
 
