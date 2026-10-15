@@ -125,6 +125,7 @@ local function buildSettings(userSettings, cfg)
         cpuDisplay = "free",
         columns = "Name Stock Want Batch Status",
         shortNumbers = false,
+        legend = true,
     }
     local user = userSettings or {}
     for k, v in pairs(user) do
@@ -183,6 +184,7 @@ local function applySettings(cfg)
     display.setShowRecent(settings.showRecent ~= false)
     display.setLayout(settings.screen)
     local unknown = display.setColumns(settings.columns, settings.shortNumbers)
+    display.setLegend(settings.legend ~= false)
     updateDisplayMode()
     -- Logged after the table has taken over the screen, so the warning shows in Recent
     if #unknown > 0 and settings.columns ~= warnedColumns then

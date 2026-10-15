@@ -165,6 +165,7 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 | `log` | `"changes"` | What the Recent log shows. `"changes"`: each entry's status when it changes. `"all"`: everything that happens, every cycle. `"problems"`: only requests, failures and errors, no "stocked" / "already crafting" / "waiting" lines. The scrolling log (`screen = "log"`) logs each status once with `"all"` too. |
 | `cpuDisplay` | `"free"` | How the header counts crafting CPUs: `"free"` shows idle CPUs (`CPUs free: 9/11`), `"busy"` shows CPUs running a job (`CPUs busy: 2/11`). |
 | `columns` | `"Name Stock Want Batch Status"` | The status table's columns, left to right. See [Table columns](#table-columns). |
+| `legend` | `true` | With no `Status` column, show a line above the key help that explains the row colors (and symbols). `false` hides it. |
 | `shortNumbers` | `false` | `true` shows numbers with 3 digits (`112M`, `12.5k`) instead of 4 (`112.5M`, `12.50k`), one character narrower per number column. |
 
 Advanced, at the bottom of `settings.lua`:
@@ -190,7 +191,7 @@ Advanced, at the bottom of `settings.lua`:
 | `Status` | The status word (`stocked`, `crafting`, `failed`, ...). |
 | `Symbol` | A one-character status: `✓` stocked, `▶` crafting, `●` requested, `…` waiting for a CPU, `✗` failed, `?` not craftable, `!` error. |
 
-Without `Status`, a line under the table explains the row colors (and the symbols, with `Symbol`), listing only the statuses that appear in the table. On a screen without colors, keep `Status` or use `Symbol`.
+Without `Status`, a line under the table explains the row colors (and the symbols, with `Symbol`), listing only the statuses that appear in the table; `settings.legend = false` hides it. On a screen without colors, keep `Status` or use `Symbol`.
 
 Fewer columns make the rows narrower, so with `screen = "fit"` the text gets larger. For example, on a 2x3 screen with 18 entries:
 

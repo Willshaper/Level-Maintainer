@@ -64,6 +64,7 @@ local DROP_ORDER = {"batch", "want", "stock", "percent"}
 
 local columnList = {"name", "stock", "want", "batch", "status"} -- settings.columns, in order
 local shortNumbers = false
+local legendEnabled = true -- settings.legend
 
 -- Narrow columns and short status words: layout "tall", or "fit" on a portrait screen
 local function narrowColumns()
@@ -115,7 +116,11 @@ local function minTableWidth()
 end
 
 -- True when the table has no Status column, so a line under it explains the colors
+-- (unless settings.legend turns it off)
 local function showLegend()
+    if not legendEnabled then
+        return false
+    end
     for _, kind in ipairs(columnList) do
         if kind == "status" then
             return false
@@ -702,6 +707,15 @@ function Display.setColumns(spec, short)
         drawAll()
     end
     return unknown
+end
+
+-- settings.legend: whether a table without a Status column explains its colors
+function Display.setLegend(enabled)
+    enabled = enabled ~= false
+    if enabled ~= legendEnabled then
+        legendEnabled = enabled
+        drawAll()
+    end
 end
 
 function Display.isActive()

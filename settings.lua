@@ -13,12 +13,18 @@ settings.log = "changes"     -- Recent log: "changes" = when an entry's status c
                              -- "all" = everything, every cycle, "problems" = only requests and failures
 settings.cpuDisplay = "free" -- header: "free" = "CPUs free: 9/11", "busy" = "CPUs busy: 2/11"
 
--- Table columns, left to right. Remove a word to hide that column, or use these instead:
+-- Table columns, left to right. Use any of these words, in any order:
+--   Name    = the entry's label (always shown)
+--   Stock   = amount in the ME system (gray when it wasn't read this cycle)
+--   Want    = the threshold to keep in stock
+--   Batch   = how many are requested at once
+--   Status  = what the entry is doing: stocked, crafting, failed, ...
 --   Percent = stock as a percentage of Want ("112%"), narrower than Stock + Want
 --   Symbol  = a one-character status instead of the Status word
--- Without Status, a line under the table explains the row colors (and symbols).
 -- Fewer columns = narrower rows = larger text with screen = "fit".
+-- Example for a narrow screen: settings.columns = "Name Percent Symbol"
 settings.columns = "Name Stock Want Batch Status"
+settings.legend = true        -- without Status: a line under the table explains the colors ("stocked  failed")
 settings.shortNumbers = false -- true = 3-digit numbers (112M, 12.5k) instead of 4 (112.5M, 12.50k)
 
 -- Advanced
