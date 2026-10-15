@@ -156,9 +156,9 @@ local function serialize(value)
     return tostring(value)
 end
 
--- Writes the new settings.lua with the old file's values filled in, and keeps the old
--- file as settings.lua.old. Returns the names of the settings that were carried over.
-local function migrateSettings()
+-- The new settings.lua with the old file's values filled in. Returns the text and the
+-- names of the settings whose values were carried over.
+local function mergedSettings()
     local values = oldSettingValues()
     local carried = {}
     local text = readFile(temp("settings.lua")):gsub("[^\r\n]+", function(line)
@@ -178,12 +178,7 @@ local function migrateSettings()
         local column = #line - #comment
         return assignment .. string.rep(" ", math.max(1, column - #assignment)) .. comment
     end)
-    filesystem.remove(path("settings.lua.old"))
-    filesystem.rename(path("settings.lua"), path("settings.lua.old"))
-    local file = io.open(path("settings.lua"), "w")
-    file:write(text)
-    file:close()
-    return carried
+    return text, carried
 end
 
 -- Settings in the new settings.lua that the user's file doesn't have
@@ -197,25 +192,41 @@ local function missingSettings()
     return missing
 end
 
-local missing = oldSettings and missingSettings() or {}
-if #missing > 0 then
-    print()
-    if oldSettings:find("settings%.screen") then
-        print("Your settings.lua doesn't have these newer settings: " .. table.concat(missing, ", "))
-    else
-        print("Your settings.lua is the older, longer version; the new one has fewer, simpler settings.")
-    end
-    if ask("Replace it with the new one? Your values are kept, and the old file is saved as settings.lua.old.") then
-        local ok, result = pcall(migrateSettings)
-        if not ok then
-            print("Could not read your settings.lua (" .. tostring(result) .. "); it was left as it is.")
-        elseif #result > 0 then
-            print("New settings.lua written. Kept your values for: " .. table.concat(result, ", "))
+local function sameText(a, b)
+    return (a:gsub("\r\n", "\n")) == (b:gsub("\r\n", "\n"))
+end
+
+-- Offer the current settings.lua whenever it differs from the user's file with their
+-- values filled in: new settings, or updated explanations
+if oldSettings then
+    local ok, merged, carried = pcall(mergedSettings)
+    if not ok then
+        print()
+        print("Could not read your settings.lua (" .. tostring(merged) .. "), so it can't be updated; it was left as it is.")
+    elseif not sameText(merged, oldSettings) then
+        print()
+        local missing = missingSettings()
+        if not oldSettings:find("settings%.screen") then
+            print("Your settings.lua is the older, longer version; the new one has fewer, simpler settings.")
+        elseif #missing > 0 then
+            print("Your settings.lua doesn't have these newer settings: " .. table.concat(missing, ", "))
         else
-            print("New settings.lua written (you had only default values).")
+            print("There is a newer settings.lua with updated explanations.")
         end
-    else
-        print("Kept your settings.lua; it still works (missing settings use their defaults).")
+        if ask("Replace it with the new one? Your values are kept, and the old file is saved as settings.lua.old.") then
+            filesystem.remove(path("settings.lua.old"))
+            filesystem.rename(path("settings.lua"), path("settings.lua.old"))
+            local file = io.open(path("settings.lua"), "w")
+            file:write(merged)
+            file:close()
+            if #carried > 0 then
+                print("New settings.lua written. Kept your values for: " .. table.concat(carried, ", "))
+            else
+                print("New settings.lua written (you had only default values).")
+            end
+        else
+            print("Kept your settings.lua; it still works (missing settings use their defaults).")
+        end
     end
 end
 filesystem.remove(temp("settings.lua"))

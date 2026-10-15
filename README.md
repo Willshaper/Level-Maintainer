@@ -34,7 +34,7 @@ wget -f https://raw.githubusercontent.com/Willshaper/Level-Maintainer/master/ins
 
 The installer replaces the scripts but keeps an existing `config.lua` and `settings.lua`. It then asks:
 
-- **Replace settings.lua with the new one?** Only asked when your `settings.lua` is missing settings that were added since you installed (or is from before the settings were simplified). Your values are carried over, and the old file is kept as `settings.lua.old`.
+- **Replace settings.lua with the new one?** Only asked when the current `settings.lua` differs from yours: new settings, or updated explanations. Your values are carried over, and the old file is kept as `settings.lua.old`.
 - **Start Maintainer automatically when the computer boots?** Adds a line to `/home/.shrc`.
 - **Turn the computer on when it receives a redstone signal?** Only asked when a redstone card is installed.
 
