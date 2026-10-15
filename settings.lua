@@ -6,8 +6,9 @@ settings.sleep = 10          -- seconds between cycles (each cycle checks every 
 settings.retryDelay = 60     -- seconds before a failed craft is tried again
 settings.cpuName = nil       -- crafting CPU to use, as named in AE2, e.g. "Maintainer" (nil = any)
 settings.utcOffset = 0       -- hours added to UTC for timestamps (1 = CET, 2 = CEST, -5 = EST)
-settings.screen = "fit"      -- "fit" = largest text that fits, "columns" = side-by-side tables,
-                             -- "log" = scrolling log
+settings.screen = "fit"      -- "fit" = largest text that fits (narrow columns on a tall screen),
+                             -- "wide" = like fit, but whole names on a tall screen too,
+                             -- "columns" = side-by-side tables, "log" = scrolling log
 settings.showRecent = true   -- show the Recent log below the table
 settings.log = "changes"     -- Recent log: "changes" = when an entry's status changes,
                              -- "all" = everything, every cycle, "problems" = only requests and failures
