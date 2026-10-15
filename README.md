@@ -34,7 +34,7 @@ wget -f https://raw.githubusercontent.com/Willshaper/Level-Maintainer/master/ins
 
 The installer replaces the scripts but keeps an existing `config.lua` and `settings.lua`. It then asks:
 
-- **Replace settings.lua with the new one?** Only asked when your `settings.lua` is from before the settings were simplified. Your values are carried over, and the old file is kept as `settings.lua.old`.
+- **Replace settings.lua with the new one?** Only asked when your `settings.lua` is missing settings that were added since you installed (or is from before the settings were simplified). Your values are carried over, and the old file is kept as `settings.lua.old`.
 - **Start Maintainer automatically when the computer boots?** Adds a line to `/home/.shrc`.
 - **Turn the computer on when it receives a redstone signal?** Only asked when a redstone card is installed.
 
@@ -190,7 +190,7 @@ Advanced, at the bottom of `settings.lua`:
 | `Status` | The status word (`stocked`, `crafting`, `failed`, ...). |
 | `Symbol` | A one-character status: `✓` stocked, `▶` crafting, `●` requested, `…` waiting for a CPU, `✗` failed, `?` not craftable, `!` error. |
 
-Without `Status`, a line under the table explains the row colors (and the symbols, with `Symbol`), listing only the statuses on screen. On a screen without colors, keep `Status` or use `Symbol`.
+Without `Status`, a line under the table explains the row colors (and the symbols, with `Symbol`), listing only the statuses that appear in the table. On a screen without colors, keep `Status` or use `Symbol`.
 
 Fewer columns make the rows narrower, so with `screen = "fit"` the text gets larger. For example, on a 2x3 screen with 18 entries:
 

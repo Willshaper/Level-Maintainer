@@ -669,10 +669,17 @@ function Display.setLayout(mode)
 end
 
 -- settings.columns: column names in any case, separated by spaces or commas, e.g.
--- "Name Percent Batch". Name is always shown. Returns a list of the words that aren't
--- columns (they are left out).
+-- "Name Percent Batch" (or a list of them). Name is always shown. Returns a list of the
+-- words that aren't columns (they are left out).
 function Display.setColumns(spec, short)
     local list, seen, unknown = {}, {}, {}
+    if type(spec) == "table" then
+        local words = {}
+        for _, word in ipairs(spec) do
+            table.insert(words, tostring(word))
+        end
+        spec = table.concat(words, " ")
+    end
     for word in tostring(spec or ""):gmatch("[^%s,;]+") do
         local kind = word:lower()
         if kind == "%" then
@@ -754,9 +761,9 @@ function Display.endBatch()
     drawAll()
 end
 
--- rows: list of {name, stock, want, batch, status, shortStatus, color}; header: see
--- Display.setHeader; footer / footerShort / footerTiny: key help, the shorter ones
--- for narrower screens
+-- rows: list of {name, stock, want, batch, percent, status, shortStatus, symbol, color,
+-- rank, stockFrozen}; header: see Display.setHeader; footer / footerShort / footerTiny:
+-- key help, the shorter ones for narrower screens
 function Display.update(newRows, newHeader, newFooter, newFooterShort, newFooterTiny)
     rows = newRows
     header = headerParts(newHeader)

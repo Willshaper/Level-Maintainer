@@ -64,8 +64,8 @@ local function expandSuffixes(text, name)
                 stop = select(2, text:find("^[%+%-][%w%.]*", stop + 1)) -- exponent with a sign: 1e+5
             end
             local token = text:sub(i, stop)
-            local number, suffix = token:match("^(%d+%.?%d*)([kKmMgGbBtT])$")
-            if number then
+            local number, suffix = token:match("^([%d%.]+)([kKmMgGbBtT])$")
+            if number and tonumber(number) then
                 replacement = string.format("%.0f", tonumber(number) * MULTIPLIERS[suffix:lower()])
             elseif not tonumber(token) then
                 local _, newlines = text:sub(1, i):gsub("\n", "")
@@ -183,12 +183,13 @@ local function applySettings(cfg)
     display.setShowRecent(settings.showRecent ~= false)
     display.setLayout(settings.screen)
     local unknown = display.setColumns(settings.columns, settings.shortNumbers)
+    updateDisplayMode()
+    -- Logged after the table has taken over the screen, so the warning shows in Recent
     if #unknown > 0 and settings.columns ~= warnedColumns then
         logInfo("WARNING: settings.columns: unknown column " .. table.concat(unknown, ", ")
             .. " (use Name, Stock, Want, Batch, Percent, Status, Symbol)")
     end
     warnedColumns = #unknown > 0 and settings.columns or nil
-    updateDisplayMode()
 end
 
 local function loadSettings()
@@ -735,9 +736,6 @@ local function main()
         logInfo("Keys (between cycles): " .. KEY_HELP .. ". Ctrl+Alt+C also stops it.")
     end
 
-    -- src.AE2 stays loaded between runs, so forget lookups from a previous run
-    -- (e.g. a pattern added in AE2 since then would still count as not craftable)
-    ae2.clearCache()
     waitForInterface()
     loadInitialConfig()
 
