@@ -163,6 +163,18 @@ Keep the clock's signal away from the screen: a redstone pulse into any block of
 
 You can change maintained items in `config.lua`. There are two blocks, `cfg.items` and `cfg.fluids`. Items and fluids work in either one: the maintainer checks what each entry actually is and uses the right stock check. The simplest setup is to put everything in `cfg.items`.
 
+## Config list (web page)
+
+[**Config list**](https://willshaper.github.io/Level-Maintainer/) builds the `config.lua` entries for you in the browser:
+
+- Type a name and amounts (`10m`, `250k` and so on) and it writes the line, with the amounts shortened the same way.
+- Keep several lists, e.g. one per maintainer computer. They are saved in your browser.
+- Untick an entry to disable it: it stays in the list but is written commented out (`--`), so the maintainer skips it.
+- Copy one line, the lines, or a whole `config.lua`. OpenComputers cuts a paste after 1024 characters, so a longer config is copied in parts.
+- Import existing lines from a `config.lua`, export or import a backup file, or copy a share link to move a list to another browser.
+
+Paste into the maintainer with E (opens `config.lua`), then Ctrl+S and Ctrl+W.
+
 ## Items
 
 ```lua

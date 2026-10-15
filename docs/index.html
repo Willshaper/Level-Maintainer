@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Level Maintainer Config List</title>
+<meta name="description" content="Build config.lua entries for the OpenComputers Level Maintainer (GTNH): several lists, k/m/g amounts, disabled entries, copy in parts for OC's paste limit.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='2' width='28' height='28' rx='6' fill='%230e1018' stroke='%232a2d42'/%3E%3Cpath d='M9 11h14M9 16h14M9 21h9' stroke='%234fc4a8' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #07080d;
+    --bg2: #0e1018;
+    --bg3: #161822;
+    --border: #1f2230;
+    --border2: #2a2d42;
+    --accent: #e8615a;
+    --accent2: #f0a04b;
+    --teal: #4fc4a8;
+    --text: #d4d6e8;
+    --text-dim: #8e92ad;
+    --text-dimmer: #5a5e78;
+    --h1: #ffffff;
+    --row-hover: rgba(255,255,255,0.04);
+    --row-active: rgba(79,196,168,0.10);
+    --ok: #4fc4a8;
+    --err: #e8615a;
+    --warn: #f0a04b;
+    --mono: 'DM Mono', ui-monospace, Consolas, monospace;
+    --sans: 'Noto Sans JP', 'Segoe UI', system-ui, sans-serif;
+    --display: 'Syne', 'Segoe UI', sans-serif;
+  }
+  [data-theme="light"] {
+    --bg: #e4e7f0;
+    --bg2: #f4f6fc;
+    --bg3: #dadeec;
+    --border: #c2c7da;
+    --border2: #a6abc4;
+    --accent: #b32a24;
+    --accent2: #8a5004;
+    --teal: #137a5c;
+    --text: #0b0d1a;
+    --text-dim: #2e3450;
+    --text-dimmer: #565c7e;
+    --h1: #0b0d1a;
+    --row-hover: rgba(0,0,0,0.04);
+    --row-active: rgba(19,122,92,0.12);
+    --ok: #137a5c;
+    --err: #b32a24;
+    --warn: #8a5004;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font-family: var(--sans); font-size: 14px; line-height: 1.45; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: 24px; color: var(--h1); margin: 0; flex: 1; }
+  h1 small { display: block; font-family: var(--sans); font-weight: 400; font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+  h2 { font-family: var(--display); font-weight: 600; font-size: 15px; color: var(--h1); margin: 0 0 10px; letter-spacing: .02em; }
+  a { color: var(--teal); }
+  section { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 4px; }
+  input[type=text], select, textarea {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 7px 9px; font: inherit;
+  }
+  input[type=text]:focus, select:focus, textarea:focus { outline: 2px solid var(--teal); outline-offset: -1px; }
+  textarea { font-family: var(--mono); font-size: 13px; resize: vertical; }
+  button {
+    background: var(--bg3); color: var(--text); border: 1px solid var(--border2); border-radius: 6px;
+    padding: 7px 12px; font: inherit; cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: var(--teal); }
+  button.primary { background: var(--teal); border-color: var(--teal); color: #07080d; font-weight: 500; }
+  [data-theme="light"] button.primary { color: #ffffff; }
+  button.danger:hover { border-color: var(--accent); color: var(--accent); }
+  button.icon { padding: 5px 8px; line-height: 1; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+  .row > .grow { flex: 1 1 200px; }
+  .fields { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+  .hint { font-size: 12px; color: var(--text-dimmer); min-height: 17px; margin-top: 3px; font-family: var(--mono); }
+  .hint.bad { color: var(--err); }
+  .buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  #status { min-height: 20px; font-size: 13px; margin-top: 8px; }
+  #status.ok { color: var(--ok); }
+  #status.err { color: var(--err); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 500; color: var(--text-dim); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--border2); }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  td.fluid { font-family: var(--mono); color: var(--text-dim); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--row-hover); }
+  tbody tr.editing { background: var(--row-active); }
+  tbody tr.off td.name, tbody tr.off td.num, tbody tr.off td.fluid { color: var(--text-dimmer); text-decoration: line-through; }
+  td.on, th.on { width: 34px; text-align: center; }
+  td.del { width: 40px; text-align: right; }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
+  .empty { color: var(--text-dimmer); padding: 14px 8px; text-align: center; }
+  .table-wrap { max-height: 420px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+  thead th { position: sticky; top: 0; background: var(--bg2); }
+  pre#preview {
+    background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; padding: 10px 12px; margin: 10px 0 0;
+    font-family: var(--mono); font-size: 13px; max-height: 340px; overflow: auto; white-space: pre; color: var(--text);
+  }
+  .meta { font-size: 12px; color: var(--text-dim); }
+  .meta.warn { color: var(--warn); }
+  .radio { display: inline-flex; align-items: center; gap: 5px; margin-right: 14px; font-size: 13px; color: var(--text); cursor: pointer; }
+  .banner { border-color: var(--teal); background: var(--row-active); }
+  .banner p { margin: 0 0 8px; }
+  .note { font-size: 12px; color: var(--text-dim); margin: 8px 0 0; }
+  dialog { background: var(--bg2); color: var(--text); border: 1px solid var(--border2); border-radius: 10px; padding: 16px; width: min(640px, 92vw); }
+  dialog::backdrop { background: rgba(0,0,0,0.55); }
+  .theme-toggle { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; }
+  .hidden { display: none !important; }
+  @media (max-width: 700px) {
+    .fields { grid-template-columns: 1fr 1fr; }
+    .fields .name-field { grid-column: 1 / -1; }
+    td.fluid, th.fluid { display: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Level Maintainer Config List
+      <small>Build <code>config.lua</code> entries for the <a href="https://github.com/Willshaper/Level-Maintainer">OpenComputers Level Maintainer</a>. Everything is saved in this browser.</small>
+    </h1>
+    <button class="theme-toggle" id="theme-toggle" title="Switch light / dark" aria-label="Switch light / dark theme">
+      <svg id="theme-icon" width="15" height="15" viewBox="0 0 13 13" fill="none"></svg>
+    </button>
+  </header>
+
+  <section id="share-banner" class="banner hidden" aria-live="polite">
+    <p id="share-text"></p>
+    <div class="buttons">
+      <button class="primary" id="share-add">Add as a new list</button>
+      <button id="share-ignore">Ignore</button>
+    </div>
+  </section>
+
+  <section id="storage-warning" class="banner hidden">
+    <p>This browser doesn't allow saving here (private window or blocked site data), so your lists are lost when you close the page. Use <b>Export backup</b> to keep them.</p>
+  </section>
+
+  <section>
+    <h2>List</h2>
+    <div class="row">
+      <div class="grow">
+        <label for="list-select">Current list</label>
+        <select id="list-select"></select>
+      </div>
+      <button id="list-new">New list</button>
+      <button id="list-rename">Rename</button>
+      <button id="list-delete" class="danger">Delete list</button>
+    </div>
+  </section>
+
+  <section>
+    <h2 id="form-title">Add an entry</h2>
+    <form id="entry-form" autocomplete="off">
+      <div class="fields">
+        <div class="name-field">
+          <label for="f-name">Item or fluid name (quotes optional)</label>
+          <input type="text" id="f-name" spellcheck="false">
+          <div class="hint" id="h-name"></div>
+        </div>
+        <div>
+          <label for="f-maintain">Maintain (0 = none; k, m, g ok)</label>
+          <input type="text" id="f-maintain" spellcheck="false" placeholder="0">
+          <div class="hint" id="h-maintain"></div>
+        </div>
+        <div>
+          <label for="f-batch">Craft at once (k, m, g ok)</label>
+          <input type="text" id="f-batch" spellcheck="false">
+          <div class="hint" id="h-batch"></div>
+        </div>
+        <div>
+          <label for="f-fluid">Drop fluid name (optional)</label>
+          <input type="text" id="f-fluid" spellcheck="false">
+          <div class="hint" id="h-fluid"></div>
+        </div>
+      </div>
+      <div class="buttons">
+        <button type="submit" class="primary" id="save-btn">Add (Enter)</button>
+        <button type="button" id="new-btn">New entry (Esc)</button>
+        <button type="button" id="copy-line-btn">Copy line</button>
+        <button type="button" id="import-lines-btn">Import lines...</button>
+      </div>
+    </form>
+    <div id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section>
+    <h2 id="entries-title">Entries</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="on" title="Untick to disable: the entry stays here but is written commented out with --">On</th>
+            <th>Name</th>
+            <th class="num">Maintain</th>
+            <th class="num">Craft at once</th>
+            <th class="fluid">Drop fluid</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="entries"></tbody>
+      </table>
+    </div>
+    <p class="note">Click an entry to edit it. Untick <b>On</b> to disable an entry: it stays in the list but is written commented out (<code>--</code>), so the maintainer skips it.</p>
+  </section>
+
+  <section>
+    <h2>Output</h2>
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <div>
+        <label class="radio"><input type="radio" name="mode" value="lines" checked> Lines only</label>
+        <label class="radio"><input type="radio" name="mode" value="file"> Whole config.lua</label>
+      </div>
+      <span class="meta" id="size"></span>
+    </div>
+    <pre id="preview"></pre>
+    <div class="buttons">
+      <button class="primary" id="copy-all">Copy all</button>
+      <button id="copy-part">Copy next part</button>
+      <button id="download">Download config.lua</button>
+    </div>
+    <p class="note">OpenComputers cuts a paste off after 1024 characters. If the output is longer, use <b>Copy next part</b> and paste the parts one after another. In the maintainer, press E to open <code>config.lua</code>, paste, then Ctrl+S to save and Ctrl+W to close.</p>
+  </section>
+
+  <section>
+    <h2>Backup and sharing</h2>
+    <div class="buttons" style="margin-top: 0;">
+      <button id="export">Export backup</button>
+      <button id="import-file">Import backup or configs.json...</button>
+      <button id="share">Copy share link</button>
+      <input type="file" id="file-input" accept=".json,application/json" class="hidden">
+    </div>
+    <p class="note"><b>Export backup</b> saves all lists to a file. <b>Import</b> adds the lists from such a file, or a <code>configs.json</code> from the old PowerShell ConfigList as a new list. <b>Copy share link</b> puts the current list in a link; opening it in another browser offers to add it there.</p>
+  </section>
+</main>
+
+<dialog id="import-dialog">
+  <h2>Import config lines</h2>
+  <p class="note" style="margin-top: 0;">Paste lines from <code>config.lua</code> (or the whole file). Lines like <code>["Name"] = {512, 1024},</code> are imported into the current list, commented-out ones as disabled; everything else is ignored. Entries with the same name are updated.</p>
+  <textarea id="import-text" rows="14" spellcheck="false"></textarea>
+  <div class="buttons">
+    <button class="primary" id="import-ok">Import</button>
+    <button id="import-cancel">Cancel</button>
+  </div>
+</dialog>
+
+<script>
+'use strict';
+
+// ─── Storage ──────────────────────────────────────────────────────────────
+// All of willshaper.github.io shares one localStorage, so keys are prefixed.
+// The theme key is shared on purpose with the other GTNH pages.
+const STORE_KEY = 'lm_configlist';
+const THEME_KEY = 'gtnh_theme';
+const PART_LIMIT = 1000;   // characters per "Copy next part"
+const PASTE_LIMIT = 1024;  // OpenComputers cuts pastes after this many characters
+
+function lsGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } }
+function lsSet(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } }
+
+// ─── Amounts ──────────────────────────────────────────────────────────────
+const EXPONENT = { k: 3, m: 6, g: 9, b: 9, t: 12 };
+const UNITS = [['t', 1e12], ['g', 1e9], ['m', 1e6], ['k', 1e3]];
+
+// "512", "1,024", "10m", "1.5k", "2,5g" -> whole number, or null. With luaOnly
+// (imports from config.lua) a "." is only a decimal point and "," isn't allowed.
+function parseAmount(text, luaOnly) {
+  const t = String(text).replace(/\s/g, '').toLowerCase();
+  let n = null;
+  const m = t.match(luaOnly ? /^(\d+)(?:\.(\d+))?([kmgbt])$/ : /^(\d+)(?:[.,](\d+))?([kmgbt])$/);
+  if (m) {
+    const e = EXPONENT[m[3]];
+    let frac = m[2] || '';
+    if (frac.length > e) {
+      if (/[^0]/.test(frac.slice(e))) return null; // 1.2345k is not a whole number
+      frac = frac.slice(0, e);
+    }
+    n = Number(m[1] + frac.padEnd(e, '0'));
+  } else if (/^\d+$/.test(t)) {
+    n = Number(t);
+  } else if (!luaOnly && /^\d{1,3}([,._]\d{3})+$/.test(t)) {
+    n = Number(t.replace(/[,._]/g, ''));
+  }
+  return n !== null && Number.isSafeInteger(n) ? n : null;
+}
+
+// 25000000 -> "25m", 16000 -> "16k", 12500 -> "12.5k". Only exact values get a
+// suffix, so 2048 and 1500 stay as they are.
+function formatAmount(n) {
+  for (const [suffix, unit] of UNITS) {
+    if (n < unit) continue;
+    if (n % unit === 0) return (n / unit) + suffix;
+    const hundredth = unit / 100;
+    if (n >= 10000 && n % hundredth === 0) {
+      const decimals = String((n % unit) / hundredth).padStart(2, '0').replace(/0+$/, '');
+      return Math.floor(n / unit) + '.' + decimals + suffix;
+    }
+  }
+  return String(n);
+}
+
+function withSeparators(n) { return n.toLocaleString('en-US'); }
+
+// ─── Entries and output ──────────────────────────────────────────────────
+function stripQuotes(text) { return String(text).trim().replace(/^["“”„]+|["“”„]+$/g, '').trim(); }
+
+// From the form boxes; throws an Error saying what is wrong
+function makeEntry(name, maintain, batch, fluid) {
+  const clean = stripQuotes(name);
+  if (!clean) throw new Error('Enter an item or fluid name.');
+  const threshold = String(maintain).trim() === '' ? 0 : parseAmount(maintain);
+  if (threshold === null) throw new Error('Amount to maintain must be a whole number, like 512, 10k or 1.5m (0 = no threshold).');
+  const count = parseAmount(batch);
+  if (count === null || count === 0) throw new Error('Amount to craft at once must be a whole number above 0, like 64 or 1k.');
+  return { name: clean, threshold, count, fluid: stripQuotes(fluid), enabled: true };
+}
+
+function luaString(s) { return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'; }
+
+// 0 threshold = nil. A disabled entry is commented out: --    ["Tantalum Dust"] = {nil, 2048},
+function formatEntry(e) {
+  const threshold = e.threshold === 0 ? 'nil' : formatAmount(e.threshold);
+  const extra = e.fluid ? ', ' + luaString(e.fluid) : '';
+  const line = `    [${luaString(e.name)}] = {${threshold}, ${formatAmount(e.count)}${extra}},`;
+  return e.enabled === false ? '--' + line : line;
+}
+
+function formatLines(entries) { return entries.map(formatEntry).join('\n'); }
+
+function formatConfigFile(entries) {
+  const lines = formatLines(entries);
+  return 'local cfg = {}\n\n' +
+    '-- [item_or_fluid_label] = {threshold, batch_size[, fluid_name for ae2fc drops]}\n' +
+    '-- threshold nil = always keep one batch crafting. Items and fluids can both go here.\n' +
+    'cfg["items"] = {\n' + (lines ? lines + '\n' : '') + '}\n\n' +
+    'return cfg\n';
+}
+
+// Lines like ["Name"] = {512, 1024},  ["Acid"] = {10m, 4m},  ["drop of X"] = {nil, 1, "x"},
+// A line commented out with -- comes in disabled; anything else is ignored.
+const LINE_PATTERN = /^\s*(--\s*)?\[\s*"((?:[^"\\]|\\.)*)"\s*\]\s*=\s*\{\s*(nil|\d[\d.]*[kmgbt]?)\s*,\s*(\d[\d.]*[kmgbt]?)\s*(?:,\s*"((?:[^"\\]|\\.)*)"\s*)?\}\s*[,;]?\s*(?:--.*)?$/i;
+function importText(text) {
+  const unescape = s => s.replace(/\\(.)/g, '$1');
+  const found = [];
+  for (const line of String(text).split(/\r?\n/)) {
+    const m = line.match(LINE_PATTERN);
+    if (!m) continue;
+    const threshold = m[3].toLowerCase() === 'nil' ? 0 : parseAmount(m[3], true);
+    const count = parseAmount(m[4], true);
+    if (threshold === null || count === null || count === 0) continue;
+    found.push({ name: unescape(m[2]), threshold, count, fluid: m[5] ? unescape(m[5]) : '', enabled: !m[1] });
+  }
+  return found;
+}
+
+// Pieces of whole lines, each at most `limit` characters; pasted one after another they
+// rebuild the text
+function splitParts(text, limit) {
+  const parts = [];
+  let current = '';
+  for (const line of text.split('\n')) {
+    const candidate = current === '' ? line : current + '\n' + line;
+    if (candidate.length + 1 > limit && current !== '') {
+      parts.push(current + '\n');
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current !== '') parts.push(current);
+  return parts;
+}
+
+// ─── State ───────────────────────────────────────────────────────────────
+// { version: 1, current: listId, mode: 'lines' | 'file', lists: [{ id, name, entries }] }
+function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+// Accepts both this page's entries and the PowerShell tool's ({Name, Threshold, ...})
+function cleanEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const name = String(raw.name ?? raw.Name ?? '').trim();
+  const threshold = Number(raw.threshold ?? raw.Threshold ?? 0);
+  const count = Number(raw.count ?? raw.Count ?? 0);
+  if (!name || !Number.isSafeInteger(threshold) || threshold < 0 || !Number.isSafeInteger(count) || count <= 0) return null;
+  const enabled = raw.enabled ?? raw.Enabled;
+  return { name, threshold, count, fluid: String(raw.fluid ?? raw.Fluid ?? ''), enabled: enabled !== false };
+}
+
+function cleanEntries(list) { return (Array.isArray(list) ? list : []).map(cleanEntry).filter(Boolean); }
+
+function loadState() {
+  let data = null;
+  try { data = JSON.parse(lsGet(STORE_KEY) || 'null'); } catch (e) { data = null; }
+  const lists = (data && Array.isArray(data.lists) ? data.lists : [])
+    .filter(l => l && typeof l.name === 'string')
+    .map(l => ({ id: String(l.id || newId()), name: l.name, entries: cleanEntries(l.entries) }));
+  if (lists.length === 0) lists.push({ id: newId(), name: 'My list', entries: [] });
+  const current = lists.some(l => l.id === data?.current) ? data.current : lists[0].id;
+  return { version: 1, current, mode: data?.mode === 'file' ? 'file' : 'lines', lists };
+}
+
+let state = loadState();
+let editIndex = -1;  // entry of the current list shown in the form, or -1 for a new one
+let parts = [];
+let partIndex = 0;
+
+function saveState() {
+  if (!lsSet(STORE_KEY, JSON.stringify(state))) document.getElementById('storage-warning').classList.remove('hidden');
+}
+
+function currentList() { return state.lists.find(l => l.id === state.current) || state.lists[0]; }
+
+function uniqueListName(name) {
+  const base = name.trim() || 'List';
+  let candidate = base;
+  for (let i = 2; state.lists.some(l => l.name === candidate); i++) candidate = `${base} (${i})`;
+  return candidate;
+}
+
+// ─── Page ────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const nameBox = $('f-name'), maintainBox = $('f-maintain'), batchBox = $('f-batch'), fluidBox = $('f-fluid');
+
+function setStatus(text, isError) {
+  const el = $('status');
+  el.textContent = text;
+  el.className = text ? (isError ? 'err' : 'ok') : '';
+}
+
+function outputText() {
+  const entries = currentList().entries;
+  return state.mode === 'file' ? formatConfigFile(entries) : formatLines(entries);
+}
+
+function renderLists() {
+  const select = $('list-select');
+  select.replaceChildren(...state.lists.map(l => {
+    const option = document.createElement('option');
+    option.value = l.id;
+    option.textContent = `${l.name} (${l.entries.length})`;
+    return option;
+  }));
+  select.value = currentList().id;
+}
+
+function renderEntries() {
+  const list = currentList();
+  const body = $('entries');
+  const rows = list.entries.map((e, i) => {
+    const tr = document.createElement('tr');
+    tr.dataset.index = i;
+    if (e.enabled === false) tr.classList.add('off');
+    if (i === editIndex) tr.classList.add('editing');
+    const on = document.createElement('td');
+    on.className = 'on';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = e.enabled !== false;
+    box.title = 'Untick to disable (written commented out)';
+    box.setAttribute('aria-label', `Enable ${e.name}`);
+    on.append(box);
+    const cell = (text, cls) => { const td = document.createElement('td'); td.className = cls; td.textContent = text; return td; };
+    const del = document.createElement('td');
+    del.className = 'del';
+    const delButton = document.createElement('button');
+    delButton.className = 'icon danger';
+    delButton.textContent = '✕';
+    delButton.title = `Delete ${e.name}`;
+    delButton.setAttribute('aria-label', `Delete ${e.name}`);
+    del.append(delButton);
+    tr.append(on, cell(e.name, 'name'), cell(e.threshold === 0 ? 'nil' : formatAmount(e.threshold), 'num'),
+      cell(formatAmount(e.count), 'num'), cell(e.fluid, 'fluid'), del);
+    return tr;
+  });
+  if (rows.length === 0) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'empty';
+    td.textContent = 'No entries yet. Add one above, or use Import lines.';
+    tr.append(td);
+    rows.push(tr);
+  }
+  body.replaceChildren(...rows);
+  const off = list.entries.filter(e => e.enabled === false).length;
+  $('entries-title').textContent = `Entries in "${list.name}"`;
+  return off;
+}
+
+function renderOutput() {
+  const list = currentList();
+  const text = outputText();
+  $('preview').textContent = text || '(empty)';
+  parts = splitParts(text, PART_LIMIT);
+  partIndex = 0;
+  $('copy-part').textContent = parts.length > 1 ? `Copy part 1 of ${parts.length}` : 'Copy next part';
+  const off = list.entries.filter(e => e.enabled === false).length;
+  const size = $('size');
+  size.textContent = `${list.entries.length} entries${off ? ` (${off} disabled)` : ''}, ${text.length} characters` +
+    (text.length > PASTE_LIMIT ? ` — over OC's ${PASTE_LIMIT} paste limit, use Copy next part` : '');
+  size.className = 'meta' + (text.length > PASTE_LIMIT ? ' warn' : '');
+  document.querySelector(`input[name=mode][value=${state.mode}]`).checked = true;
+}
+
+function render() {
+  renderLists();
+  renderEntries();
+  renderOutput();
+  $('form-title').textContent = editIndex >= 0 ? `Edit ${currentList().entries[editIndex].name}` : 'Add an entry';
+  $('save-btn').textContent = editIndex >= 0 ? 'Update (Enter)' : 'Add (Enter)';
+}
+
+// Live hints under the boxes: what an amount is read as, or what's wrong
+function updateHints() {
+  const hint = (id, text, bad) => { const el = $(id); el.textContent = text; el.className = 'hint' + (bad ? ' bad' : ''); };
+  const maintain = maintainBox.value.trim();
+  if (maintain === '' || maintain === '0') hint('h-maintain', maintain === '' ? '' : 'no threshold (nil)', false);
+  else { const n = parseAmount(maintain); hint('h-maintain', n === null ? 'not a whole number' : '= ' + withSeparators(n), n === null); }
+  const batch = batchBox.value.trim();
+  if (batch === '') hint('h-batch', '', false);
+  else { const n = parseAmount(batch); hint('h-batch', n === null || n === 0 ? 'must be a whole number above 0' : '= ' + withSeparators(n), n === null || n === 0); }
+  const name = stripQuotes(nameBox.value);
+  const list = currentList();
+  const existing = list.entries.findIndex(e => e.name === name);
+  hint('h-name', name && existing >= 0 && existing !== editIndex ? 'already in this list; Add updates it' : '', false);
+  hint('h-fluid', '', false);
+}
+
+function clearForm() {
+  nameBox.value = maintainBox.value = batchBox.value = fluidBox.value = '';
+  updateHints();
+  nameBox.focus();
+}
+
+function startNewEntry() {
+  editIndex = -1;
+  clearForm();
+  render();
+}
+
+function editEntry(index) {
+  const e = currentList().entries[index];
+  editIndex = index;
+  nameBox.value = e.name;
+  maintainBox.value = formatAmount(e.threshold);
+  batchBox.value = formatAmount(e.count);
+  fluidBox.value = e.fluid;
+  updateHints();
+  render();
+  setStatus(`Editing ${e.name}. Change the boxes and press Enter, Copy line, or Esc for a new entry.`);
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    // Older browsers, or no permission: copy through a hidden text box
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.append(area);
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    area.remove();
+    return ok;
+  }
+}
+
+function download(filename, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ─── Form ────────────────────────────────────────────────────────────────
+$('entry-form').addEventListener('submit', ev => {
+  ev.preventDefault();
+  try {
+    const entry = makeEntry(nameBox.value, maintainBox.value, batchBox.value, fluidBox.value);
+    const list = currentList();
+    const existing = list.entries.findIndex(e => e.name === entry.name);
+    let message;
+    if (editIndex >= 0) {
+      if (existing >= 0 && existing !== editIndex) throw new Error(`"${entry.name}" is already in the list. Click that entry to change it.`);
+      entry.enabled = list.entries[editIndex].enabled;
+      list.entries[editIndex] = entry;
+      message = `Updated ${entry.name}.`;
+    } else if (existing >= 0) {
+      entry.enabled = list.entries[existing].enabled;
+      list.entries[existing] = entry;
+      message = `${entry.name} was already in the list; updated it.`;
+    } else {
+      list.entries.push(entry);
+      message = `Added ${entry.name}.`;
+    }
+    saveState();
+    editIndex = -1;
+    clearForm();
+    render();
+    setStatus(message);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
+});
+
+for (const box of [nameBox, maintainBox, batchBox, fluidBox]) box.addEventListener('input', updateHints);
+$('new-btn').addEventListener('click', () => { startNewEntry(); setStatus(''); });
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && !$('import-dialog').open && document.activeElement?.closest('#entry-form')) {
+    startNewEntry();
+    setStatus('');
+  }
+});
+
+$('copy-line-btn').addEventListener('click', async () => {
+  try {
+    const line = formatEntry(makeEntry(nameBox.value, maintainBox.value, batchBox.value, fluidBox.value));
+    if (await copyText(line)) setStatus('Copied: ' + line.trim());
+    else setStatus('Could not copy; select the line in the preview and copy it by hand.', true);
+  } catch (e) {
+    setStatus(e.message, true);
+  }
+});
+
+// ─── Entries table ───────────────────────────────────────────────────────
+$('entries').addEventListener('click', ev => {
+  const tr = ev.target.closest('tr[data-index]');
+  if (!tr) return;
+  const index = Number(tr.dataset.index);
+  const list = currentList();
+  const entry = list.entries[index];
+  if (ev.target.matches('input[type=checkbox]')) {
+    entry.enabled = ev.target.checked;
+    saveState();
+    render();
+    setStatus(entry.enabled ? `Enabled ${entry.name}.` : `Disabled ${entry.name}: it stays in the list, commented out with --.`);
+    return;
+  }
+  if (ev.target.closest('button')) {
+    if (!confirm(`Delete ${entry.name} from "${list.name}"?`)) return;
+    list.entries.splice(index, 1);
+    if (editIndex === index) { editIndex = -1; clearForm(); }
+    else if (editIndex > index) editIndex--;
+    saveState();
+    render();
+    setStatus(`Deleted ${entry.name}.`);
+    return;
+  }
+  editEntry(index);
+});
+
+// ─── Lists ───────────────────────────────────────────────────────────────
+function selectList(id) {
+  state.current = id;
+  editIndex = -1;
+  saveState();
+  clearForm();
+  render();
+}
+
+$('list-select').addEventListener('change', ev => { selectList(ev.target.value); setStatus(''); });
+
+$('list-new').addEventListener('click', () => {
+  const name = prompt('Name for the new list (e.g. "Main base" or "Platline"):', '');
+  if (name === null || !name.trim()) return;
+  const list = { id: newId(), name: uniqueListName(name), entries: [] };
+  state.lists.push(list);
+  selectList(list.id);
+  setStatus(`Created the list "${list.name}".`);
+});
+
+$('list-rename').addEventListener('click', () => {
+  const list = currentList();
+  const name = prompt('New name for this list:', list.name);
+  if (name === null || !name.trim() || name.trim() === list.name) return;
+  list.name = uniqueListName(name);
+  saveState();
+  render();
+  setStatus(`Renamed the list to "${list.name}".`);
+});
+
+$('list-delete').addEventListener('click', () => {
+  const list = currentList();
+  if (!confirm(`Delete the list "${list.name}" with its ${list.entries.length} entries? Export a backup first if you might want it back.`)) return;
+  state.lists = state.lists.filter(l => l.id !== list.id);
+  if (state.lists.length === 0) state.lists.push({ id: newId(), name: 'My list', entries: [] });
+  selectList(state.lists[0].id);
+  setStatus(`Deleted the list "${list.name}".`);
+});
+
+// ─── Output ──────────────────────────────────────────────────────────────
+for (const radio of document.querySelectorAll('input[name=mode]')) {
+  radio.addEventListener('change', () => { state.mode = radio.value; saveState(); renderOutput(); });
+}
+
+$('copy-all').addEventListener('click', async () => {
+  const text = outputText();
+  if (!text) { setStatus('The list is empty.', true); return; }
+  if (!(await copyText(text))) { setStatus('Could not copy; select the preview text and copy it by hand.', true); return; }
+  setStatus(text.length > PASTE_LIMIT
+    ? `Copied ${text.length} characters. OC cuts pastes after ${PASTE_LIMIT}; if it does, use Copy next part.`
+    : 'Copied everything to the clipboard.');
+});
+
+$('copy-part').addEventListener('click', async () => {
+  if (parts.length === 0) { setStatus('The list is empty.', true); return; }
+  if (parts.length === 1) { $('copy-all').click(); return; }
+  const i = partIndex;
+  if (!(await copyText(parts[i]))) { setStatus('Could not copy.', true); return; }
+  partIndex = (i + 1) % parts.length;
+  $('copy-part').textContent = `Copy part ${partIndex + 1} of ${parts.length}`;
+  setStatus(partIndex === 0
+    ? `Copied part ${i + 1} of ${parts.length} (the last one). Paste it into OC; the next click starts over at part 1.`
+    : `Copied part ${i + 1} of ${parts.length}. Paste it into OC, then click again for the next part.`);
+});
+
+$('download').addEventListener('click', () => {
+  download('config.lua', formatConfigFile(currentList().entries), 'text/plain');
+  setStatus('Downloaded config.lua (the whole file).');
+});
+
+// ─── Import lines ────────────────────────────────────────────────────────
+$('import-lines-btn').addEventListener('click', () => { $('import-text').value = ''; $('import-dialog').showModal(); $('import-text').focus(); });
+$('import-cancel').addEventListener('click', () => $('import-dialog').close());
+$('import-ok').addEventListener('click', () => {
+  const found = importText($('import-text').value);
+  $('import-dialog').close();
+  if (found.length === 0) { setStatus('No config lines found in the pasted text.', true); return; }
+  const list = currentList();
+  let added = 0, updated = 0;
+  for (const entry of found) {
+    const existing = list.entries.findIndex(e => e.name === entry.name);
+    if (existing >= 0) { list.entries[existing] = entry; updated++; }
+    else { list.entries.push(entry); added++; }
+  }
+  editIndex = -1;
+  saveState();
+  clearForm();
+  render();
+  setStatus(`Imported into "${list.name}": ${added} added, ${updated} updated.`);
+});
+
+// ─── Backup file ─────────────────────────────────────────────────────────
+// Entries use the PowerShell tool's field names, so its configs.json and these files match
+function exportEntries(entries) {
+  return entries.map(e => ({ Name: e.name, Threshold: e.threshold, Count: e.count, Fluid: e.fluid, Enabled: e.enabled !== false }));
+}
+
+$('export').addEventListener('click', () => {
+  const backup = { app: 'level-maintainer-configlist', version: 1, lists: state.lists.map(l => ({ name: l.name, entries: exportEntries(l.entries) })) };
+  const date = new Date().toISOString().slice(0, 10);
+  download(`configlist-backup-${date}.json`, JSON.stringify(backup, null, 2), 'application/json');
+  setStatus(`Exported ${state.lists.length} list(s).`);
+});
+
+$('import-file').addEventListener('click', () => { $('file-input').value = ''; $('file-input').click(); });
+$('file-input').addEventListener('change', async ev => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch (e) { setStatus(`${file.name} is not a backup or configs.json file.`, true); return; }
+  let incoming = [];
+  if (Array.isArray(data)) {
+    // configs.json from the PowerShell ConfigList: one list
+    const defaultName = file.name.replace(/\.json$/i, '') === 'configs' ? 'Imported' : file.name.replace(/\.json$/i, '');
+    const name = prompt(`${file.name} has ${data.length} entries. Name for the new list:`, defaultName);
+    if (name === null) return;
+    incoming = [{ name: name.trim() || defaultName, entries: cleanEntries(data) }];
+  } else if (data && Array.isArray(data.lists)) {
+    incoming = data.lists.filter(l => l && typeof l.name === 'string').map(l => ({ name: l.name, entries: cleanEntries(l.entries) }));
+    const summary = incoming.map(l => `${l.name} (${l.entries.length})`).join(', ');
+    if (!incoming.length || !confirm(`Add ${incoming.length} list(s) from ${file.name}?\n\n${summary}\n\nLists with a name you already have are added with a number after the name.`)) return;
+  } else {
+    setStatus(`${file.name} is not a backup or configs.json file.`, true);
+    return;
+  }
+  for (const l of incoming) state.lists.push({ id: newId(), name: uniqueListName(l.name), entries: l.entries });
+  selectList(state.lists[state.lists.length - 1].id);
+  setStatus(`Added ${incoming.length} list(s) from ${file.name}.`);
+});
+
+// ─── Share link ──────────────────────────────────────────────────────────
+// The list goes in the link after #share= as base64url JSON: {n: name, e: [[name, threshold, count, fluid, on]]}
+function toBase64Url(text) {
+  const bytes = new TextEncoder().encode(text);
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromBase64Url(text) {
+  const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+  return new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0)));
+}
+
+$('share').addEventListener('click', async () => {
+  const list = currentList();
+  const payload = { n: list.name, e: list.entries.map(e => [e.name, e.threshold, e.count, e.fluid, e.enabled === false ? 0 : 1]) };
+  const link = location.origin + location.pathname + '#share=' + toBase64Url(JSON.stringify(payload));
+  if (await copyText(link)) setStatus(`Copied a share link for "${list.name}" (${list.entries.length} entries, ${link.length} characters).`);
+  else setStatus('Could not copy the link.', true);
+});
+
+let sharedList = null;
+function readShareLink() {
+  if (!location.hash.startsWith('#share=')) return;
+  const match = location.hash.match(/^#share=([A-Za-z0-9_-]+)$/);
+  if (!match) {
+    setStatus('The share link is damaged and could not be read.', true);
+    clearShareLink();
+    return;
+  }
+  try {
+    const payload = JSON.parse(fromBase64Url(match[1]));
+    const entries = cleanEntries((payload.e || []).map(a => Array.isArray(a)
+      ? { name: a[0], threshold: a[1], count: a[2], fluid: a[3] || '', enabled: a[4] !== 0 } : null));
+    sharedList = { name: String(payload.n || 'Shared list'), entries };
+    $('share-text').textContent = `This link contains the list "${sharedList.name}" with ${entries.length} entries.`;
+    $('share-banner').classList.remove('hidden');
+  } catch (e) {
+    setStatus('The share link is damaged and could not be read.', true);
+    clearShareLink();
+  }
+}
+function clearShareLink() {
+  history.replaceState(null, '', location.pathname + location.search);
+  $('share-banner').classList.add('hidden');
+  sharedList = null;
+}
+$('share-add').addEventListener('click', () => {
+  if (!sharedList) return;
+  const list = { id: newId(), name: uniqueListName(sharedList.name), entries: sharedList.entries };
+  state.lists.push(list);
+  clearShareLink();
+  selectList(list.id);
+  setStatus(`Added the list "${list.name}".`);
+});
+$('share-ignore').addEventListener('click', clearShareLink);
+window.addEventListener('hashchange', readShareLink);
+
+// ─── Theme (shared with the other GTNH pages) ────────────────────────────
+const MOON = '<circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1.5A5 5 0 0 0 6.5 11.5 5 5 0 0 1 6.5 1.5z" fill="currentColor"/>';
+const SUN = '<circle cx="6.5" cy="6.5" r="2.5" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1v1M6.5 11v1M1 6.5H2M11 6.5h1M2.8 2.8l.7.7M9.5 9.5l.7.7M9.5 3.5l-.7.7M3.5 9.5l-.7.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>';
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  $('theme-icon').innerHTML = theme === 'light' ? MOON : SUN;
+}
+$('theme-toggle').addEventListener('click', () => {
+  const next = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+  lsSet(THEME_KEY, next);
+  applyTheme(next);
+});
+
+// ─── Other tabs ──────────────────────────────────────────────────────────
+// A change saved in another tab is picked up here, so neither tab overwrites the other
+window.addEventListener('storage', ev => {
+  if (ev.key === THEME_KEY) applyTheme(ev.newValue === 'light' ? 'light' : 'dark');
+  if (ev.key !== STORE_KEY) return;
+  const keep = state.current;
+  state = loadState();
+  if (state.lists.some(l => l.id === keep)) state.current = keep;
+  if (editIndex >= currentList().entries.length) editIndex = -1;
+  render();
+});
+
+// ─── Start ───────────────────────────────────────────────────────────────
+applyTheme(lsGet(THEME_KEY) === 'light' ? 'light' : 'dark');
+if (!lsSet(STORE_KEY, lsGet(STORE_KEY) ?? JSON.stringify(state))) $('storage-warning').classList.remove('hidden');
+render();
+updateHints();
+readShareLink();
+nameBox.focus();
+</script>
+</body>
+</html>
