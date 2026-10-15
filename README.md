@@ -69,6 +69,7 @@ E edit config  S edit settings  R reload  Q quit
 - The header counts down to the next cycle.
 - Long lines in the Recent log wrap onto the next line instead of being cut off.
 - By default (`settings.screen = "fit"`) the maintainer picks the screen resolution itself, so the table fills the screen with text as large as possible; with few entries the text is big, with many it gets smaller. `"columns"` instead keeps the resolution and splits the rows into side-by-side tables on wide screens. On a screen that is taller than wide (e.g. 2x3 blocks) `"fit"` uses narrower columns and short status words, so the text can be larger; `"tall"` uses them on any screen.
+- `settings.columns` picks the columns, e.g. `"Name Percent Batch"` for a narrow screen; see [Table columns](#table-columns).
 - With a color GPU the rows are colored by status. If there are more entries than fit, the table has pages: the header shows `Page 1/3`, and Page Up/Down or the Up/Down arrows switch pages. `settings.showRecent = false` gives the table the whole screen.
 
 Set `settings.screen = "log"` for the plain scrolling log instead.
@@ -163,6 +164,8 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 | `showRecent` | `true` | Show the recent log lines below the status table. `false` gives the whole screen to the table. |
 | `log` | `"changes"` | What the Recent log shows. `"changes"`: each entry's status when it changes. `"all"`: everything that happens, every cycle. `"problems"`: only requests, failures and errors, no "stocked" / "already crafting" / "waiting" lines. The scrolling log (`screen = "log"`) logs each status once with `"all"` too. |
 | `cpuDisplay` | `"free"` | How the header counts crafting CPUs: `"free"` shows idle CPUs (`CPUs free: 9/11`), `"busy"` shows CPUs running a job (`CPUs busy: 2/11`). |
+| `columns` | `"Name Stock Want Batch Status"` | The status table's columns, left to right. See [Table columns](#table-columns). |
+| `shortNumbers` | `false` | `true` shows numbers with 3 digits (`112M`, `12.5k`) instead of 4 (`112.5M`, `12.50k`), one character narrower per number column. |
 
 Advanced, at the bottom of `settings.lua`:
 
@@ -172,6 +175,39 @@ Advanced, at the bottom of `settings.lua`:
 | `cacheDuration` | `600` | Seconds craftable lookups are cached. New patterns are picked up after at most this long. |
 | `pollInterval` | `1` | Seconds between checks while AE2 calculates a request. |
 | `reloadCheck` | `0` | Live reload: seconds between checks for a saved `config.lua` or `settings.lua` while running, e.g. `30`. Only useful if you can edit the files outside the game. `0` = off. |
+
+### Table columns
+
+`settings.columns` lists the table's columns, left to right. Remove a word to hide that column; case and commas don't matter, and the name is always shown.
+
+| Column | Shows |
+|---|---|
+| `Name` | The entry's label. |
+| `Stock` | Amount in the ME system (entries with a threshold). Gray when it wasn't read this cycle. |
+| `Want` | The threshold. |
+| `Batch` | How many are requested at once. |
+| `Percent` | Stock as a percentage of Want (`112%`, `>999%`); narrower than Stock and Want together. |
+| `Status` | The status word (`stocked`, `crafting`, `failed`, ...). |
+| `Symbol` | A one-character status: `✓` stocked, `▶` crafting, `●` requested, `…` waiting for a CPU, `✗` failed, `?` not craftable, `!` error. |
+
+Without `Status`, a line under the table explains the row colors (and the symbols, with `Symbol`), listing only the statuses on screen. On a screen without colors, keep `Status` or use `Symbol`.
+
+Fewer columns make the rows narrower, so with `screen = "fit"` the text gets larger. For example, on a 2x3 screen with 18 entries:
+
+| `columns` | Row width |
+|---|---|
+| `"Name Stock Want Batch Status"` | 44 |
+| `"Name Stock Want Batch"` | 33 |
+| `"Name Stock Want Symbol"` | 28 |
+| `"Name Percent Batch"` | 26 |
+
+```
+Name               %  Batch
+Tantalum Dust      -   2048
+Drilling Fluid  112% 25.00M
+Ethanol         145% 400.0k
+stocked  failed
+```
 
 Older `settings.lua` files still work: `display` and `layout` are read as `screen`, and `logSkips = false` / `logRepeats = true` as `log = "problems"` / `"all"`.
 

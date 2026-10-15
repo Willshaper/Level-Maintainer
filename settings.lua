@@ -13,6 +13,14 @@ settings.log = "changes"     -- Recent log: "changes" = when an entry's status c
                              -- "all" = everything, every cycle, "problems" = only requests and failures
 settings.cpuDisplay = "free" -- header: "free" = "CPUs free: 9/11", "busy" = "CPUs busy: 2/11"
 
+-- Table columns, left to right. Remove a word to hide that column, or use these instead:
+--   Percent = stock as a percentage of Want ("112%"), narrower than Stock + Want
+--   Symbol  = a one-character status instead of the Status word
+-- Without Status, a line under the table explains the row colors (and symbols).
+-- Fewer columns = narrower rows = larger text with screen = "fit".
+settings.columns = "Name Stock Want Batch Status"
+settings.shortNumbers = false -- true = 3-digit numbers (112M, 12.5k) instead of 4 (112.5M, 12.50k)
+
 -- Advanced
 settings.requireFreeCpu = true -- only start a craft when a crafting CPU (or cpuName) is idle
 settings.cacheDuration = 600   -- seconds before a newly added pattern is noticed

@@ -62,12 +62,9 @@ local function readFile(filePath)
     return text
 end
 
--- A settings.lua from before the settings were simplified (it has no settings.screen).
--- The new one is downloaded as well, so the user can be offered to switch.
+-- An existing settings.lua. The current one is downloaded as well, so the user can be
+-- offered to switch when theirs is older (missing settings that were added since).
 local oldSettings = readFile(path("settings.lua"))
-if oldSettings and oldSettings:find("settings%.screen") then
-    oldSettings = nil
-end
 
 if not filesystem.exists(path("src")) then
     filesystem.makeDirectory(path("src"))
@@ -189,9 +186,25 @@ local function migrateSettings()
     return carried
 end
 
-if oldSettings then
+-- Settings in the new settings.lua that the user's file doesn't have
+local function missingSettings()
+    local missing = {}
+    for key in ("\n" .. readFile(temp("settings.lua"))):gmatch("\nsettings%.([%w_]+)%s*=") do
+        if not oldSettings:find("settings%." .. key .. "%s*=") then
+            table.insert(missing, key)
+        end
+    end
+    return missing
+end
+
+local missing = oldSettings and missingSettings() or {}
+if #missing > 0 then
     print()
-    print("Your settings.lua is the older, longer version; the new one has fewer, simpler settings.")
+    if oldSettings:find("settings%.screen") then
+        print("Your settings.lua doesn't have these newer settings: " .. table.concat(missing, ", "))
+    else
+        print("Your settings.lua is the older, longer version; the new one has fewer, simpler settings.")
+    end
     if ask("Replace it with the new one? Your values are kept, and the old file is saved as settings.lua.old.") then
         local ok, result = pcall(migrateSettings)
         if not ok then
@@ -202,10 +215,10 @@ if oldSettings then
             print("New settings.lua written (you had only default values).")
         end
     else
-        print("Kept your settings.lua; it still works.")
+        print("Kept your settings.lua; it still works (missing settings use their defaults).")
     end
-    filesystem.remove(temp("settings.lua"))
 end
+filesystem.remove(temp("settings.lua"))
 
 -- Auto-start: OpenOS runs every line of /home/.shrc when the shell starts
 local shrc = (os.getenv("HOME") or "/home") .. "/.shrc"

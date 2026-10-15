@@ -123,6 +123,8 @@ local function buildSettings(userSettings, cfg)
         showRecent = true,
         log = "changes",
         cpuDisplay = "free",
+        columns = "Name Stock Want Batch Status",
+        shortNumbers = false,
     }
     local user = userSettings or {}
     for k, v in pairs(user) do
@@ -172,12 +174,20 @@ local function updateDisplayMode()
     end
 end
 
+local warnedColumns = nil -- settings.columns value last warned about
+
 local function applySettings(cfg)
     settings = buildSettings(userSettings, cfg)
     ae2.configure(settings)
     setTimeOffset(settings.utcOffset)
     display.setShowRecent(settings.showRecent ~= false)
     display.setLayout(settings.screen)
+    local unknown = display.setColumns(settings.columns, settings.shortNumbers)
+    if #unknown > 0 and settings.columns ~= warnedColumns then
+        logInfo("WARNING: settings.columns: unknown column " .. table.concat(unknown, ", ")
+            .. " (use Name, Stock, Want, Batch, Percent, Status, Symbol)")
+    end
+    warnedColumns = #unknown > 0 and settings.columns or nil
     updateDisplayMode()
 end
 
@@ -310,32 +320,42 @@ local function maintain(name, config, request)
     end
 end
 
--- 11968656 -> "11.97M"
+-- 11968656 -> "11.97M", or "12.0M" with settings.shortNumbers (3 digits)
 local function formatAmount(n)
     if type(n) ~= "number" then
         return "-"
     end
-    if n < 10000 then
+    local short = settings.shortNumbers == true
+    if n < (short and 1000 or 10000) then
         return tostring(math.floor(n))
     end
     for _, unit in ipairs({{1e12, "T"}, {1e9, "G"}, {1e6, "M"}, {1e3, "k"}}) do
         if n >= unit[1] then
             local value = n / unit[1]
-            return string.format(value < 100 and "%.2f" or "%.1f", value) .. unit[2]
+            local format
+            if short then
+                format = value < 9.995 and "%.2f" or (value < 99.95 and "%.1f" or "%.0f")
+            else
+                format = value < 99.995 and "%.2f" or "%.1f"
+            end
+            return string.format(format, value) .. unit[2]
         end
     end
 end
 
--- Status text, color and the short text for the narrow columns of screen = "tall"
-local STATUS_TEXT = {
-    crafting = {"crafting", "blue"},
-    requested = {"requested", "yellow"},
-    stocked = {"stocked", "green"},
-    nocpu = {"waiting for CPU", "orange", "no CPU"},
-    retry = {"failed", "red"}, -- the retry time is in the log line
-    missing = {"not craftable", "red", "no pattern"},
-    error = {"error", "red"},
+-- How each status shows in the table. short: the word with narrow columns and in the
+-- color legend; symbol: for the Symbol column; rank: order in the color legend.
+-- The symbols are single-width characters in OpenComputers' font.
+local STATUS_LOOK = {
+    stocked = {text = "stocked", color = "green", symbol = "✓", rank = 1},
+    crafting = {text = "crafting", color = "blue", symbol = "▶", rank = 2},
+    requested = {text = "requested", color = "yellow", symbol = "●", rank = 3},
+    nocpu = {text = "waiting for CPU", short = "no CPU", color = "orange", symbol = "…", rank = 4},
+    retry = {text = "failed", color = "red", symbol = "✗", rank = 5}, -- the retry time is in the log line
+    missing = {text = "not craftable", short = "no pattern", color = "red", symbol = "?", rank = 6},
+    error = {text = "error", color = "red", symbol = "!", rank = 7},
 }
+local WAITING_LOOK = {text = "waiting", color = "white", symbol = "·", rank = 0} -- before the first check
 
 -- Shown on top of the table, so they are on the first page
 local PROBLEM = {retry = true, missing = true, error = true}
@@ -373,7 +393,13 @@ local function render(title)
     local rows = {}
     for _, entry in ipairs(entries) do
         local status = currentStatus[entry.name]
-        local look = STATUS_TEXT[status] or {"waiting", "white"}
+        local look = STATUS_LOOK[status] or WAITING_LOOK
+        local threshold, amount = entry.config[1], lastAmount[entry.name]
+        local percent = "-"
+        if type(threshold) == "number" and threshold > 0 and type(amount) == "number" then
+            local value = math.floor(amount * 100 / threshold)
+            percent = value > 999 and ">999%" or (value .. "%")
+        end
         table.insert(rows, {
             name = entry.name,
             stock = formatAmount(lastAmount[entry.name]),
@@ -381,9 +407,12 @@ local function render(title)
             stockFrozen = lastAmount[entry.name] ~= nil and amountCycle[entry.name] ~= cycleNumber,
             want = formatAmount(entry.config[1]),
             batch = formatAmount(entry.config[2]),
-            status = look[1],
-            shortStatus = look[3] or look[1],
-            color = look[2],
+            percent = percent,
+            status = look.text,
+            shortStatus = look.short or look.text,
+            symbol = look.symbol,
+            color = look.color,
+            rank = look.rank,
             problem = PROBLEM[status] == true,
         })
     end

@@ -44,39 +44,93 @@ local COLORS = {
 }
 
 local MAX_NAME_WIDTH = 50 -- so the numbers stay next to the names on wide screens
+local MIN_SCREEN_WIDTH = 26 -- narrowest resolution "fit" picks: the shortest key help fits
 local TABLE_GAP = " | "
 
--- Column sizes. status: the row field shown in the Status column; statusGap: spaces
--- before it; minScreen: narrowest resolution "fit" / "tall" picks
-local WIDE = {
-    status = "status", statusWidth = 15, statusGap = 2, -- fits "waiting for CPU"
-    minName = 16, minScreen = 50, -- the short key help and a compact header fit
-    numbers = {{title = "Stock", key = "stock", width = 8}, {title = "Want", key = "want", width = 8},
-        {title = "Batch", key = "batch", width = 7}},
+-- The columns settings.columns can list, besides Name. wide / narrow: width on wide
+-- screens and with the narrow columns of "tall"; narrowKey: the row field shown with
+-- narrow columns; frozen: drawn gray when the stock wasn't read this cycle.
+local COLUMN_TYPES = {
+    stock = {title = "Stock", key = "stock", wide = 8, narrow = 6, number = true, right = true, frozen = true},
+    want = {title = "Want", key = "want", wide = 8, narrow = 6, number = true, right = true},
+    batch = {title = "Batch", key = "batch", wide = 7, narrow = 6, number = true, right = true},
+    percent = {title = "%", key = "percent", wide = 5, narrow = 5, right = true, frozen = true}, -- fits ">999%"
+    status = {title = "Status", key = "status", narrowKey = "shortStatus", wide = 15, narrow = 10}, -- fits "waiting for CPU" / "no pattern"
+    symbol = {title = "", key = "symbol", wide = 1, narrow = 1},
 }
-local NARROW = {
-    status = "shortStatus", statusWidth = 10, statusGap = 1, -- fits "no pattern"
-    minName = 12, minScreen = 30,
-    numbers = {{title = "Stock", key = "stock", width = 6}, {title = "Want", key = "want", width = 6},
-        {title = "Batch", key = "batch", width = 6}},
-}
+local SHORT_NUMBER_WIDTH = 5 -- settings.shortNumbers: "112M", "1.25k"
+-- Dropped first, in this order, when a table is too narrow for all its columns
+local DROP_ORDER = {"batch", "want", "stock", "percent"}
+
+local columnList = {"name", "stock", "want", "batch", "status"} -- settings.columns, in order
+local shortNumbers = false
+
+-- Narrow columns and short status words: layout "tall", or "fit" on a portrait screen
+local function narrowColumns()
+    return layoutMode == "tall" or (layoutMode == "fit" and portrait)
+end
+
+local function minNameWidth()
+    return narrowColumns() and 12 or 16
+end
+
+-- The columns of settings.columns with their sizes for the current layout. Each has
+-- title, key, width, gap (spaces before it) and right (right-aligned); the name column
+-- has name = true and no width yet.
+local function columnSet()
+    local narrow = narrowColumns()
+    local columns = {}
+    for _, kind in ipairs(columnList) do
+        local column
+        if kind == "name" then
+            column = {kind = kind, name = true, title = "Name", key = "name"}
+        else
+            local def = COLUMN_TYPES[kind]
+            local width = narrow and def.narrow or def.wide
+            if def.number and shortNumbers then
+                width = SHORT_NUMBER_WIDTH
+            end
+            column = {kind = kind, title = def.title, key = narrow and def.narrowKey or def.key, width = width,
+                right = def.right, frozen = def.frozen}
+        end
+        -- One space between columns; two before a wide Status column, as it is text
+        column.gap = #columns == 0 and 0 or ((kind == "status" and not narrow) and 2 or 1)
+        table.insert(columns, column)
+    end
+    return columns
+end
 
 -- Width of everything in a row except the name
-local function fixedWidth(style)
-    local used = style.statusWidth + style.statusGap
-    for _, column in ipairs(style.numbers) do
-        used = used + column.width + 1
+local function fixedWidth(columns)
+    local used = 0
+    for _, column in ipairs(columns) do
+        used = used + column.gap + (column.width or 0)
     end
     return used
 end
 
-local MIN_TABLE_WIDTH = 20 + fixedWidth(WIDE) -- narrowest side-by-side table ("columns")
+-- The narrowest side-by-side table for layout "columns"
+local function minTableWidth()
+    return 20 + fixedWidth(columnSet())
+end
 
-local function currentStyle()
-    if layoutMode == "tall" or (layoutMode == "fit" and portrait) then
-        return NARROW
+-- True when the table has no Status column, so a line under it explains the colors
+local function showLegend()
+    for _, kind in ipairs(columnList) do
+        if kind == "status" then
+            return false
+        end
     end
-    return WIDE
+    return true
+end
+
+local function showsSymbols()
+    for _, kind in ipairs(columnList) do
+        if kind == "symbol" then
+            return true
+        end
+    end
+    return false
 end
 
 -- Pads or cuts text to exactly `width` characters (cut text ends with "~")
@@ -101,27 +155,65 @@ local function fitRight(text, width)
     return string.rep(" ", width - length) .. text
 end
 
+-- The legend under a table without a Status column: the statuses on screen, each in
+-- its color (with its symbol when the table has a Symbol column), packed into lines of
+-- at most `width` characters. Returns a list of lines, each a list of {text, color, x}.
+local function legendLines(width)
+    if not showLegend() then
+        return {}
+    end
+    local seen, items = {}, {}
+    for _, row in ipairs(rows) do
+        local word = row.shortStatus or row.status
+        if not seen[word] then
+            seen[word] = true
+            local text = showsSymbols() and ((row.symbol or "?") .. " " .. word) or word
+            table.insert(items, {text = text, color = row.color, rank = row.rank or 0})
+        end
+    end
+    table.sort(items, function(a, b) return a.rank < b.rank end)
+    local lines, line, x = {}, nil, 1
+    for _, item in ipairs(items) do
+        local length = unicode.len(item.text)
+        if line and x + 2 + length - 1 > width then
+            line = nil
+        end
+        if not line then
+            line, x = {}, 1
+            table.insert(lines, line)
+        else
+            x = x + 2
+        end
+        table.insert(line, {text = item.text, color = item.color, x = x})
+        x = x + length
+    end
+    return lines
+end
+
 -- Screen areas for a resolution: line 1 header, line 2 column titles, then the table
--- rows, a separator, the recent log lines, and the key help on the last line. Without
--- the recent panel the table rows go down to the key help line.
--- Returns the number of log lines, the separator line (or nil) and the table rows.
-local function areas(height)
+-- rows, the color legend (tables without a Status column), a separator, the recent log
+-- lines, and the key help on the last line. Without the recent panel the table and
+-- legend go down to the key help line.
+-- Returns the number of log lines, the separator line (or nil), the table rows and the
+-- first legend line.
+local function areas(height, width)
+    local legend = #legendLines(width)
     if not showRecent then
-        return 0, nil, math.max(1, height - 3)
+        return 0, nil, math.max(1, height - 3 - legend), height - legend
     end
     local logLines = math.max(3, math.floor(height * 0.3))
     if layoutMode ~= "columns" then
         -- Table lines no row needs go to the recent panel
-        logLines = logLines + math.max(0, height - 4 - logLines - #rows)
+        logLines = logLines + math.max(0, height - 4 - legend - logLines - #rows)
     end
     local separatorY = height - 1 - logLines
-    return logLines, separatorY, math.max(1, separatorY - 3)
+    return logLines, separatorY, math.max(1, separatorY - 3 - legend), separatorY - legend
 end
 
 local function layout()
     local width, height = gpu.getResolution()
-    local logLines, separatorY, tableRows = areas(height)
-    return width, height, logLines, separatorY, tableRows
+    local logLines, separatorY, tableRows, legendY = areas(height, width)
+    return width, height, logLines, separatorY, tableRows, legendY
 end
 
 -- Number of side-by-side tables for a screen width
@@ -129,7 +221,7 @@ local function tableCount(width)
     if layoutMode ~= "columns" then
         return 1
     end
-    local count = math.floor((width + #TABLE_GAP) / (MIN_TABLE_WIDTH + #TABLE_GAP))
+    local count = math.floor((width + #TABLE_GAP) / (minTableWidth() + #TABLE_GAP))
     return math.max(1, math.min(count, #rows))
 end
 
@@ -153,51 +245,64 @@ local function colorSetter()
     end, colors
 end
 
--- Number columns that fit next to a readable name. On narrow tables Batch is
--- dropped first, then Want, then Stock. Returns the name width and the columns.
-local function columnsFor(width, style)
-    local columns = {}
-    for _, column in ipairs(style.numbers) do
-        table.insert(columns, column)
-    end
-    while true do
-        local used = style.statusWidth + style.statusGap
-        for _, column in ipairs(columns) do
-            used = used + column.width + 1
+-- The columns that fit in a table `width` wide next to a readable name: on narrow
+-- tables Batch is dropped first, then Want, Stock and Percent. Fills in the name's
+-- width and each column's offset (characters from the table's left edge).
+local function columnsFor(width)
+    local columns = columnSet()
+    local minName = minNameWidth()
+    for _, kind in ipairs(DROP_ORDER) do
+        if width - fixedWidth(columns) >= minName then
+            break
         end
-        if width - used >= style.minName or #columns == 0 then
-            return math.max(8, math.min(MAX_NAME_WIDTH, width - used)), columns
+        for i, column in ipairs(columns) do
+            if column.kind == kind then
+                table.remove(columns, i)
+                if i == 1 and columns[1] then
+                    columns[1].gap = 0
+                end
+                break
+            end
         end
-        table.remove(columns)
     end
+    local offset = 0
+    for _, column in ipairs(columns) do
+        if column.name then
+            column.width = math.max(8, math.min(MAX_NAME_WIDTH, width - fixedWidth(columns)))
+        end
+        offset = offset + column.gap
+        column.offset = offset
+        offset = offset + column.width
+    end
+    return columns
 end
 
-local function formatRow(nameWidth, columns, row, style)
-    local line = fit(row.name, nameWidth)
+local function formatRow(columns, row)
+    local parts = {}
     for _, column in ipairs(columns) do
-        line = line .. " " .. fitRight(row[column.key], column.width)
+        local value = row[column.key]
+        table.insert(parts, string.rep(" ", column.gap) .. (column.right and fitRight or fit)(value, column.width))
     end
-    return line .. string.rep(" ", style.statusGap) .. tostring(row[style.status] or row.status or "")
+    return table.concat(parts)
 end
 
 -- The resolution for layouts "fit" and "tall": the smallest one (so the largest text)
 -- that shows every row, in the shape of the screen so the text fills it edge to edge.
--- Wide columns make room for the whole name; narrow ones only for a short one and give the name
--- whatever width the screen's shape leaves over.
+-- Wide columns make room for the whole name; narrow ones only for a short one and give
+-- the name whatever width the screen's shape leaves over.
 local function fitResolution()
     local maxWidth, maxHeight = gpu.maxResolution()
     local ratio = screenRatio or (maxWidth / maxHeight)
-    local style = currentStyle()
-    local nameWidth = style.minName
-    if style == WIDE then
+    local nameWidth = minNameWidth()
+    if not narrowColumns() then
         for _, row in ipairs(rows) do
             nameWidth = math.max(nameWidth, math.min(unicode.len(row.name), MAX_NAME_WIDTH))
         end
     end
-    local needWidth = math.min(maxWidth, math.max(style.minScreen, nameWidth + fixedWidth(style)))
+    local needWidth = math.min(maxWidth, math.max(MIN_SCREEN_WIDTH, nameWidth + fixedWidth(columnSet())))
     for height = 5, maxHeight do
-        local _, _, tableRows = areas(height)
         local width = math.min(maxWidth, math.floor(height * ratio))
+        local _, _, tableRows = areas(height, width)
         if tableRows >= #rows and width >= needWidth then
             return width, height
         end
@@ -261,39 +366,28 @@ local function drawHeader()
     gpu.set(1, 1, fit(headerLine(width, pageCount(width, tableRows)), width))
 end
 
--- Column where the Stock value starts in a table row, or nil if Stock isn't shown
-local function stockColumn(nameWidth, columns)
-    local position = nameWidth
-    for _, column in ipairs(columns) do
-        position = position + 1
-        if column.key == "stock" then
-            return position, column.width
-        end
-        position = position + column.width
-    end
-    return nil
-end
-
 -- Draws one table of rows starting at column x
 local function drawSubTable(x, tableWidth, tableRows, pageRows, setColor, colors)
-    local style = currentStyle()
-    local nameWidth, columns = columnsFor(tableWidth, style)
-    local stockOffset, stockWidth = stockColumn(nameWidth, columns)
-    local titles = {name = "Name", [style.status] = "Status"}
+    local columns = columnsFor(tableWidth)
+    local titles = {}
     for _, column in ipairs(columns) do
         titles[column.key] = column.title
     end
     setColor("gray")
-    gpu.set(x, 2, fit(formatRow(nameWidth, columns, titles, style), tableWidth))
+    gpu.set(x, 2, fit(formatRow(columns, titles), tableWidth))
     for i = 1, tableRows do
         local row = pageRows[i]
         if row then
             setColor(row.color)
-            gpu.set(x, 2 + i, fit(formatRow(nameWidth, columns, row, style), tableWidth))
-            -- A stock value that wasn't read this cycle is redrawn in gray
-            if row.stockFrozen and colors and stockOffset and stockOffset + stockWidth <= tableWidth then
-                setColor("gray")
-                gpu.set(x + stockOffset, 2 + i, fitRight(row.stock, stockWidth))
+            gpu.set(x, 2 + i, fit(formatRow(columns, row), tableWidth))
+            -- Stock (and Percent) that wasn't read this cycle is redrawn in gray
+            if row.stockFrozen and colors then
+                for _, column in ipairs(columns) do
+                    if column.frozen and column.offset + column.width <= tableWidth then
+                        setColor("gray")
+                        gpu.set(x + column.offset, 2 + i, fitRight(row[column.key], column.width))
+                    end
+                end
             end
         else
             gpu.fill(x, 2 + i, tableWidth, 1, " ")
@@ -301,8 +395,20 @@ local function drawSubTable(x, tableWidth, tableRows, pageRows, setColor, colors
     end
 end
 
+-- The color legend under a table without a Status column
+local function drawLegend(width, legendY, setColor)
+    for i, line in ipairs(legendLines(width)) do
+        local y = legendY + i - 1
+        gpu.fill(1, y, width, 1, " ")
+        for _, item in ipairs(line) do
+            setColor(item.color)
+            gpu.set(item.x, y, fit(item.text, math.max(0, math.min(unicode.len(item.text), width - item.x + 1))))
+        end
+    end
+end
+
 local function drawTable()
-    local width, _, _, separatorY, tableRows = layout()
+    local width, _, _, separatorY, tableRows, legendY = layout()
     local setColor, colors = colorSetter()
     page = math.min(page, pageCount(width, tableRows))
 
@@ -331,6 +437,8 @@ local function drawTable()
             end
         end
     end
+
+    drawLegend(width, legendY, setColor)
 
     if separatorY then
         setColor("gray")
@@ -558,6 +666,35 @@ function Display.setLayout(mode)
         page = 1
         drawAll()
     end
+end
+
+-- settings.columns: column names in any case, separated by spaces or commas, e.g.
+-- "Name Percent Batch". Name is always shown. Returns a list of the words that aren't
+-- columns (they are left out).
+function Display.setColumns(spec, short)
+    local list, seen, unknown = {}, {}, {}
+    for word in tostring(spec or ""):gmatch("[^%s,;]+") do
+        local kind = word:lower()
+        if kind == "%" then
+            kind = "percent"
+        end
+        if kind ~= "name" and not COLUMN_TYPES[kind] then
+            table.insert(unknown, word)
+        elseif not seen[kind] then
+            seen[kind] = true
+            table.insert(list, kind)
+        end
+    end
+    if not seen.name then
+        table.insert(list, 1, "name")
+    end
+    short = short == true
+    if table.concat(list, " ") ~= table.concat(columnList, " ") or short ~= shortNumbers then
+        columnList = list
+        shortNumbers = short
+        drawAll()
+    end
+    return unknown
 end
 
 function Display.isActive()
