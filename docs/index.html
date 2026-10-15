@@ -78,7 +78,7 @@
   button.icon { padding: 5px 8px; line-height: 1; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
   .row > .grow { flex: 1 1 200px; }
-  .fields { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+  .fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; }
   .hint { font-size: 12px; color: var(--text-dimmer); min-height: 17px; margin-top: 3px; font-family: var(--mono); }
   .hint.bad { color: var(--err); }
   .buttons { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -106,6 +106,12 @@
   }
   .meta { font-size: 12px; color: var(--text-dim); }
   .meta.warn { color: var(--warn); }
+  .explain { margin: 12px 0 0; padding: 10px 12px; border-left: 3px solid var(--border2); font-size: 13px; color: var(--text-dim); }
+  .explain p { margin: 0 0 4px; }
+  .explain p:last-child { margin-bottom: 0; }
+  .explain b { color: var(--text); font-weight: 500; }
+  kbd { font-family: var(--mono); font-size: 12px; padding: 1px 5px; border: 1px solid var(--border2); border-bottom-width: 2px; border-radius: 4px; background: var(--bg3); color: var(--text); }
+  table.no-fluid .fluid { display: none; }
   .radio { display: inline-flex; align-items: center; gap: 5px; margin-right: 14px; font-size: 13px; color: var(--text); cursor: pointer; }
   .banner { border-color: var(--teal); background: var(--row-active); }
   .banner p { margin: 0 0 8px; }
@@ -162,24 +168,19 @@
     <form id="entry-form" autocomplete="off">
       <div class="fields">
         <div class="name-field">
-          <label for="f-name">Item or fluid name (quotes optional)</label>
-          <input type="text" id="f-name" spellcheck="false">
+          <label for="f-name">Name</label>
+          <input type="text" id="f-name" spellcheck="false" placeholder="Ctrl+C in NEI, then Ctrl+V here">
           <div class="hint" id="h-name"></div>
         </div>
         <div>
-          <label for="f-maintain">Maintain (0 = none; k, m, g ok)</label>
+          <label for="f-maintain">Maintain</label>
           <input type="text" id="f-maintain" spellcheck="false" placeholder="0">
           <div class="hint" id="h-maintain"></div>
         </div>
         <div>
-          <label for="f-batch">Craft at once (k, m, g ok)</label>
+          <label for="f-batch">Batch Amount</label>
           <input type="text" id="f-batch" spellcheck="false">
           <div class="hint" id="h-batch"></div>
-        </div>
-        <div>
-          <label for="f-fluid">Drop fluid name (optional)</label>
-          <input type="text" id="f-fluid" spellcheck="false">
-          <div class="hint" id="h-fluid"></div>
         </div>
       </div>
       <div class="buttons">
@@ -190,18 +191,24 @@
       </div>
     </form>
     <div id="status" role="status" aria-live="polite"></div>
+    <div class="explain">
+      <p><b>Name</b>: the item or fluid exactly as the game shows it. Hover it in NEI and press <kbd>Ctrl+C</kbd> to copy its name, then paste it here with <kbd>Ctrl+V</kbd>. Quotes are optional.</p>
+      <p><b>Maintain</b>: keep at least this many in the ME system (fluids in mB). Leave it empty or 0 to always keep one batch crafting.</p>
+      <p><b>Batch Amount</b>: how many to request at once.</p>
+      <p>Amounts can end in <code>k</code> (thousand), <code>m</code> (million), <code>g</code> or <code>b</code> (billion) and <code>t</code> (trillion): <code>250k</code> = 250,000, <code>1.5m</code> = 1,500,000. Separators work too: <code>1,024</code>.</p>
+    </div>
   </section>
 
   <section>
     <h2 id="entries-title">Entries</h2>
     <div class="table-wrap">
-      <table>
+      <table id="entries-table">
         <thead>
           <tr>
             <th class="on" title="Untick to disable: the entry stays here but is written commented out with --">On</th>
             <th>Name</th>
             <th class="num">Maintain</th>
-            <th class="num">Craft at once</th>
+            <th class="num">Batch</th>
             <th class="fluid">Drop fluid</th>
             <th></th>
           </tr>
@@ -216,8 +223,8 @@
     <h2>Output</h2>
     <div class="row" style="justify-content: space-between; align-items: center;">
       <div>
-        <label class="radio"><input type="radio" name="mode" value="lines" checked> Lines only</label>
-        <label class="radio"><input type="radio" name="mode" value="file"> Whole config.lua</label>
+        <label class="radio"><input type="radio" name="mode" value="file" checked> Whole config.lua</label>
+        <label class="radio"><input type="radio" name="mode" value="lines"> Lines only</label>
       </div>
       <span class="meta" id="size"></span>
     </div>
@@ -312,14 +319,15 @@ function withSeparators(n) { return n.toLocaleString('en-US'); }
 // ─── Entries and output ──────────────────────────────────────────────────
 function stripQuotes(text) { return String(text).trim().replace(/^["“”„]+|["“”„]+$/g, '').trim(); }
 
-// From the form boxes; throws an Error saying what is wrong
-function makeEntry(name, maintain, batch, fluid) {
+// From the form boxes; throws an Error saying what is wrong. `fluid` (the fluid name for
+// ae2fc drops on GTNH 2.8) has no box any more; it only comes from imported lines.
+function makeEntry(name, maintain, batch, fluid = '') {
   const clean = stripQuotes(name);
   if (!clean) throw new Error('Enter an item or fluid name.');
   const threshold = String(maintain).trim() === '' ? 0 : parseAmount(maintain);
-  if (threshold === null) throw new Error('Amount to maintain must be a whole number, like 512, 10k or 1.5m (0 = no threshold).');
+  if (threshold === null) throw new Error('Maintain must be a whole number, like 512, 10k or 1.5m (empty or 0 = no threshold).');
   const count = parseAmount(batch);
-  if (count === null || count === 0) throw new Error('Amount to craft at once must be a whole number above 0, like 64 or 1k.');
+  if (count === null || count === 0) throw new Error('Batch Amount must be a whole number above 0, like 64 or 1k.');
   return { name: clean, threshold, count, fluid: stripQuotes(fluid), enabled: true };
 }
 
@@ -380,7 +388,8 @@ function splitParts(text, limit) {
 }
 
 // ─── State ───────────────────────────────────────────────────────────────
-// { version: 1, current: listId, mode: 'lines' | 'file', lists: [{ id, name, entries }] }
+// { version: 1, current: listId, output: 'file' | 'lines', lists: [{ id, name, entries }] }
+// (output replaced the older mode field, so the new default, the whole config.lua, applies once)
 function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 // Accepts both this page's entries and the PowerShell tool's ({Name, Threshold, ...})
@@ -404,7 +413,7 @@ function loadState() {
     .map(l => ({ id: String(l.id || newId()), name: l.name, entries: cleanEntries(l.entries) }));
   if (lists.length === 0) lists.push({ id: newId(), name: 'My list', entries: [] });
   const current = lists.some(l => l.id === data?.current) ? data.current : lists[0].id;
-  return { version: 1, current, mode: data?.mode === 'file' ? 'file' : 'lines', lists };
+  return { version: 1, current, output: data?.output === 'lines' ? 'lines' : 'file', lists };
 }
 
 let state = loadState();
@@ -427,7 +436,7 @@ function uniqueListName(name) {
 
 // ─── Page ────────────────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
-const nameBox = $('f-name'), maintainBox = $('f-maintain'), batchBox = $('f-batch'), fluidBox = $('f-fluid');
+const nameBox = $('f-name'), maintainBox = $('f-maintain'), batchBox = $('f-batch');
 
 function setStatus(text, isError) {
   const el = $('status');
@@ -437,7 +446,7 @@ function setStatus(text, isError) {
 
 function outputText() {
   const entries = currentList().entries;
-  return state.mode === 'file' ? formatConfigFile(entries) : formatLines(entries);
+  return state.output === 'file' ? formatConfigFile(entries) : formatLines(entries);
 }
 
 function renderLists() {
@@ -490,6 +499,8 @@ function renderEntries() {
     rows.push(tr);
   }
   body.replaceChildren(...rows);
+  // The drop fluid column only shows when an entry has one (imported ae2fc drop lines)
+  $('entries-table').classList.toggle('no-fluid', !list.entries.some(e => e.fluid));
   const off = list.entries.filter(e => e.enabled === false).length;
   $('entries-title').textContent = `Entries in "${list.name}"`;
   return off;
@@ -507,7 +518,7 @@ function renderOutput() {
   size.textContent = `${list.entries.length} entries${off ? ` (${off} disabled)` : ''}, ${text.length} characters` +
     (text.length > PASTE_LIMIT ? ` — over OC's ${PASTE_LIMIT} paste limit, use Copy next part` : '');
   size.className = 'meta' + (text.length > PASTE_LIMIT ? ' warn' : '');
-  document.querySelector(`input[name=mode][value=${state.mode}]`).checked = true;
+  document.querySelector(`input[name=mode][value=${state.output}]`).checked = true;
 }
 
 function render() {
@@ -531,11 +542,10 @@ function updateHints() {
   const list = currentList();
   const existing = list.entries.findIndex(e => e.name === name);
   hint('h-name', name && existing >= 0 && existing !== editIndex ? 'already in this list; Add updates it' : '', false);
-  hint('h-fluid', '', false);
 }
 
 function clearForm() {
-  nameBox.value = maintainBox.value = batchBox.value = fluidBox.value = '';
+  nameBox.value = maintainBox.value = batchBox.value = '';
   updateHints();
   nameBox.focus();
 }
@@ -552,7 +562,6 @@ function editEntry(index) {
   nameBox.value = e.name;
   maintainBox.value = formatAmount(e.threshold);
   batchBox.value = formatAmount(e.count);
-  fluidBox.value = e.fluid;
   updateHints();
   render();
   setStatus(`Editing ${e.name}. Change the boxes and press Enter, Copy line, or Esc for a new entry.`);
@@ -589,11 +598,16 @@ function download(filename, text, type) {
 }
 
 // ─── Form ────────────────────────────────────────────────────────────────
+// An edited entry keeps the drop fluid name it was imported with
+function editedFluid() {
+  return editIndex >= 0 ? currentList().entries[editIndex].fluid : '';
+}
+
 $('entry-form').addEventListener('submit', ev => {
   ev.preventDefault();
   try {
-    const entry = makeEntry(nameBox.value, maintainBox.value, batchBox.value, fluidBox.value);
     const list = currentList();
+    const entry = makeEntry(nameBox.value, maintainBox.value, batchBox.value, editedFluid());
     const existing = list.entries.findIndex(e => e.name === entry.name);
     let message;
     if (editIndex >= 0) {
@@ -603,6 +617,7 @@ $('entry-form').addEventListener('submit', ev => {
       message = `Updated ${entry.name}.`;
     } else if (existing >= 0) {
       entry.enabled = list.entries[existing].enabled;
+      entry.fluid = list.entries[existing].fluid;
       list.entries[existing] = entry;
       message = `${entry.name} was already in the list; updated it.`;
     } else {
@@ -619,7 +634,7 @@ $('entry-form').addEventListener('submit', ev => {
   }
 });
 
-for (const box of [nameBox, maintainBox, batchBox, fluidBox]) box.addEventListener('input', updateHints);
+for (const box of [nameBox, maintainBox, batchBox]) box.addEventListener('input', updateHints);
 $('new-btn').addEventListener('click', () => { startNewEntry(); setStatus(''); });
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && !$('import-dialog').open && document.activeElement?.closest('#entry-form')) {
@@ -630,7 +645,7 @@ document.addEventListener('keydown', ev => {
 
 $('copy-line-btn').addEventListener('click', async () => {
   try {
-    const line = formatEntry(makeEntry(nameBox.value, maintainBox.value, batchBox.value, fluidBox.value));
+    const line = formatEntry(makeEntry(nameBox.value, maintainBox.value, batchBox.value, editedFluid()));
     if (await copyText(line)) setStatus('Copied: ' + line.trim());
     else setStatus('Could not copy; select the line in the preview and copy it by hand.', true);
   } catch (e) {
@@ -706,7 +721,7 @@ $('list-delete').addEventListener('click', () => {
 
 // ─── Output ──────────────────────────────────────────────────────────────
 for (const radio of document.querySelectorAll('input[name=mode]')) {
-  radio.addEventListener('change', () => { state.mode = radio.value; saveState(); renderOutput(); });
+  radio.addEventListener('change', () => { state.output = radio.value; saveState(); renderOutput(); });
 }
 
 $('copy-all').addEventListener('click', async () => {
