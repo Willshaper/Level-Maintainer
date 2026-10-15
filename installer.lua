@@ -52,6 +52,23 @@ local function download(filename)
     return filesystem.exists(temp(filename)) and filesystem.size(temp(filename)) > 0
 end
 
+local function readFile(filePath)
+    local file = io.open(filePath, "r")
+    if not file then
+        return nil
+    end
+    local text = file:read("*a")
+    file:close()
+    return text
+end
+
+-- A settings.lua from before the settings were simplified (it has no settings.screen).
+-- The new one is downloaded as well, so the user can be offered to switch.
+local oldSettings = readFile(path("settings.lua"))
+if oldSettings and oldSettings:find("settings%.screen") then
+    oldSettings = nil
+end
+
 if not filesystem.exists(path("src")) then
     filesystem.makeDirectory(path("src"))
 end
@@ -67,15 +84,23 @@ for _, file in ipairs({"config.lua", "settings.lua"}) do
     end
 end
 
-local failed = {}
+local downloads = {}
 for _, file in ipairs(wanted) do
+    table.insert(downloads, file)
+end
+if oldSettings then
+    table.insert(downloads, "settings.lua")
+end
+
+local failed = {}
+for _, file in ipairs(downloads) do
     if not download(file) then
         table.insert(failed, file)
     end
 end
 
 if #failed > 0 then
-    for _, file in ipairs(wanted) do
+    for _, file in ipairs(downloads) do
         filesystem.remove(temp(file))
     end
     print()
@@ -94,6 +119,92 @@ local function ask(question)
     io.write(question .. " [y/N] ")
     local answer = io.read()
     return answer ~= nil and answer:lower():sub(1, 1) == "y"
+end
+
+-- The values set in the old settings.lua, under their new names
+local function oldSettingValues()
+    local chunk, err = load(oldSettings, "=settings.lua", "t", {})
+    if not chunk then
+        error(err, 0)
+    end
+    local old = chunk()
+    if type(old) ~= "table" then
+        error("it does not return the settings", 0)
+    end
+    local values = {}
+    for key, value in pairs(old) do
+        values[key] = value
+    end
+    if old.screen == nil then
+        if old.display == "log" then
+            values.screen = "log"
+        elseif old.layout ~= nil then
+            values.screen = old.layout
+        end
+    end
+    if old.log == nil then
+        if old.logRepeats then
+            values.log = "all"
+        elseif old.logSkips == false then
+            values.log = "problems"
+        end
+    end
+    return values
+end
+
+local function serialize(value)
+    if type(value) == "string" then
+        return string.format("%q", value)
+    end
+    return tostring(value)
+end
+
+-- Writes the new settings.lua with the old file's values filled in, and keeps the old
+-- file as settings.lua.old. Returns the names of the settings that were carried over.
+local function migrateSettings()
+    local values = oldSettingValues()
+    local carried = {}
+    local text = readFile(temp("settings.lua")):gsub("[^\r\n]+", function(line)
+        local key, value, comment = line:match("^settings%.([%w_]+)%s*=%s*(.-)%s*(%-%-.*)$")
+        if not key then
+            key, value = line:match("^settings%.([%w_]+)%s*=%s*(.-)%s*$")
+        end
+        if not key or values[key] == nil or serialize(values[key]) == value then
+            return line
+        end
+        table.insert(carried, key)
+        local assignment = "settings." .. key .. " = " .. serialize(values[key])
+        if not comment then
+            return assignment
+        end
+        -- keep the comment where it was, so the comments stay lined up
+        local column = #line - #comment
+        return assignment .. string.rep(" ", math.max(1, column - #assignment)) .. comment
+    end)
+    filesystem.remove(path("settings.lua.old"))
+    filesystem.rename(path("settings.lua"), path("settings.lua.old"))
+    local file = io.open(path("settings.lua"), "w")
+    file:write(text)
+    file:close()
+    return carried
+end
+
+if oldSettings then
+    print()
+    print("Your settings.lua is the older, longer version; the new one has fewer, simpler settings.")
+    if ask("Replace it with the new one? Your values are kept, and the old file is saved as settings.lua.old.") then
+        local ok, result = pcall(migrateSettings)
+        if not ok then
+            print("Could not read your settings.lua (" .. tostring(result) .. "); it was left as it is.")
+        elseif #result > 0 then
+            print("New settings.lua written. Kept your values for: " .. table.concat(result, ", "))
+        else
+            print("New settings.lua written (you had only default values).")
+        end
+    else
+        print("Kept your settings.lua; it still works.")
+    end
+    filesystem.remove(temp("settings.lua"))
 end
 
 -- Auto-start: OpenOS runs every line of /home/.shrc when the shell starts
@@ -127,6 +238,7 @@ if component.isAvailable("redstone") then
     elseif ask("Turn the computer on when it receives a redstone signal (for a watchdog clock)?") then
         redstone.setWakeThreshold(1)
         print("Wake-on-redstone on. A redstone pulse into the computer now starts it if it is off.")
+        print("Keep the signal away from the screen: a redstone pulse turns an OC screen on or off.")
     end
 end
 

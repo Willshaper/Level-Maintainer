@@ -34,6 +34,7 @@ wget -f https://raw.githubusercontent.com/Willshaper/Level-Maintainer/master/ins
 
 The installer replaces the scripts but keeps an existing `config.lua` and `settings.lua`. It then asks:
 
+- **Replace settings.lua with the new one?** Only asked when your `settings.lua` is from before the settings were simplified. Your values are carried over, and the old file is kept as `settings.lua.old`.
 - **Start Maintainer automatically when the computer boots?** Adds a line to `/home/.shrc`.
 - **Turn the computer on when it receives a redstone signal?** Only asked when a redstone card is installed.
 
@@ -66,10 +67,11 @@ E edit config  S edit settings  R reload  Q quit
 - **Status** is one of: `stocked`, `crafting`, `requested`, `waiting for CPU`, `failed` (the Recent log says when it is retried), `not craftable`, `error`, or `waiting` before the entry's first check.
 - Rows that need attention (`failed`, `error`, `not craftable`) are listed first; the rest are alphabetical.
 - The header counts down to the next cycle.
-- By default (`settings.layout = "fit"`) the maintainer picks the screen resolution itself, so the table fills the screen with text as large as possible; with few entries the text is big, with many it gets smaller. `"columns"` instead keeps the resolution and splits the rows into side-by-side tables on wide screens. On a screen that is taller than wide (e.g. 2x3 blocks) `"fit"` uses narrower columns and short status words, so the text can be larger; `"tall"` uses them on any screen.
+- Long lines in the Recent log wrap onto the next line instead of being cut off.
+- By default (`settings.screen = "fit"`) the maintainer picks the screen resolution itself, so the table fills the screen with text as large as possible; with few entries the text is big, with many it gets smaller. `"columns"` instead keeps the resolution and splits the rows into side-by-side tables on wide screens. On a screen that is taller than wide (e.g. 2x3 blocks) `"fit"` uses narrower columns and short status words, so the text can be larger; `"tall"` uses them on any screen.
 - With a color GPU the rows are colored by status. If there are more entries than fit, the table has pages: the header shows `Page 1/3`, and Page Up/Down or the Up/Down arrows switch pages. `settings.showRecent = false` gives the table the whole screen.
 
-Set `settings.display = "log"` for the plain scrolling log instead.
+Set `settings.screen = "log"` for the plain scrolling log instead.
 
 Keys work while the maintainer waits between cycles (and while it waits at startup for an ME interface or a fixed `config.lua`):
 
@@ -116,6 +118,8 @@ A computer that runs out of power switches off and stays off. To have it switch 
 
 Each pulse turns the computer on if it is off; a running computer ignores it. With auto-start on, the maintainer starts with it.
 
+Keep the clock's signal away from the screen: a redstone pulse into any block of an OpenComputers screen turns the screen off, and the next one turns it back on.
+
 # Config
 
 You can change maintained items in `config.lua`. There are two blocks, `cfg.items` and `cfg.fluids`. Items and fluids work in either one: the maintainer checks what each entry actually is and uses the right stock check. The simplest setup is to put everything in `cfg.items`.
@@ -130,6 +134,8 @@ cfg["items"] = {
 ```
 
 Pattern: `["item_label"] = {threshold, batch_size, fluid_name?}`. The third value is only needed for `ae2fc:fluid_drop` items and is the fluid's registry name -- this path works on any GTNH version.
+
+Numbers can end in `k` (thousand), `m` (million), `g` or `b` (billion) and `t` (trillion), e.g. `["Nitric Acid"] = {250m, 40m}` or `{1.5k, 500}`. Names in quotes are never changed, so `["64k ME Storage Cell"]` stays as it is.
 
 ## Fluids (GTNH 2.9+)
 
@@ -149,20 +155,25 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 
 | Setting | Default | What it does |
 |---|---|---|
-| `sleep` | `10` | Seconds between cycles. |
-| `retryDelay` | `60` | Seconds to wait before recalculating an entry whose request failed (missing ingredients, no suitable CPU). `0` retries every cycle. |
-| `requireFreeCpu` | `true` | Only start a calculation when a crafting CPU (or `cpuName`) is idle. |
+| `sleep` | `10` | Seconds between cycles. Each cycle checks every entry once. |
+| `retryDelay` | `60` | Seconds to wait before recalculating an entry whose request failed (missing ingredients, no suitable CPU). `0` retries every cycle. Also the pause before the maintainer restarts itself after an unexpected error (at least 5). |
 | `cpuName` | `nil` | Send every request to this named crafting CPU. `nil` lets AE2 pick. |
+| `utcOffset` | `0` | Hours added to UTC for log timestamps (e.g. `1` for CET, `2` for CEST). Timestamps use the server's real clock, not in-game time. |
+| `screen` | `"fit"` | `"fit"` shows the status table described under [Screen and keys](#screen-and-keys) and changes the screen resolution so it fills the screen with the largest text that fits (the old resolution comes back when the maintainer stops). On a screen taller than wide it uses narrow columns and short status words (`no CPU`, `no pattern`). `"columns"` keeps the resolution and puts the rows in side-by-side tables when the screen is wide enough. `"log"` shows a scrolling log instead of the table. Also accepted: `"tall"` (always the narrow columns) and `"fixed"` (keep the resolution, one table). |
+| `showRecent` | `true` | Show the recent log lines below the status table. `false` gives the whole screen to the table. |
+| `log` | `"changes"` | What the Recent log shows. `"changes"`: each entry's status when it changes. `"all"`: everything that happens, every cycle. `"problems"`: only requests, failures and errors, no "stocked" / "already crafting" / "waiting" lines. The scrolling log (`screen = "log"`) logs each status once with `"all"` too. |
+| `cpuDisplay` | `"free"` | How the header counts crafting CPUs: `"free"` shows idle CPUs (`CPUs free: 9/11`), `"busy"` shows CPUs running a job (`CPUs busy: 2/11`). |
+
+Advanced, at the bottom of `settings.lua`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `requireFreeCpu` | `true` | Only start a calculation when a crafting CPU (or `cpuName`) is idle. |
 | `cacheDuration` | `600` | Seconds craftable lookups are cached. New patterns are picked up after at most this long. |
 | `pollInterval` | `1` | Seconds between checks while AE2 calculates a request. |
-| `logSkips` | `true` | Log entries skipped for being in progress, stocked, waiting to retry or waiting for a CPU. |
-| `display` | `"table"` | `"table"` shows the status table described under [Screen and keys](#screen-and-keys); `"log"` shows a scrolling log. |
-| `showRecent` | `true` | Show the recent log lines below the status table. `false` gives the whole screen to the table. |
-| `cpuDisplay` | `"free"` | How the header counts crafting CPUs: `"free"` shows idle CPUs (`CPUs free: 9/11`), `"busy"` shows CPUs running a job (`CPUs busy: 2/11`). |
-| `layout` | `"fit"` | How the status table uses the screen. `"fit"` changes the screen resolution so the rows fill the screen with the largest text that fits (matched to the screen's shape; the old resolution comes back when the maintainer stops). On a screen taller than wide it uses the narrow columns of `"tall"`. `"columns"` keeps the resolution and puts the rows in side-by-side tables when the screen is wide enough. `"fixed"` keeps the resolution with one table. `"tall"` is `"fit"` that always uses narrow columns and short status words (`no CPU`, `no pattern`); long names are cut to fit. |
-| `logRepeats` | `false` | Show everything that happens, every cycle, in the Recent panel of the status table. `false` logs each entry's status once and again only when it changes. The scrolling log (`display = "log"`) always logs each status once. |
 | `reloadCheck` | `0` | Live reload: seconds between checks for a saved `config.lua` or `settings.lua` while running, e.g. `30`. Only useful if you can edit the files outside the game. `0` = off. |
-| `utcOffset` | `0` | Hours added to UTC for log timestamps (e.g. `1` for CET, `2` for CEST). Timestamps use the server's real clock, not in-game time. |
+
+Older `settings.lua` files still work: `display` and `layout` are read as `screen`, and `logSkips = false` / `logRepeats = true` as `log = "problems"` / `"all"`.
 
 **!! Threshold has a performance impact -- only add it when necessary, and preferably not on mainnet !!**
 

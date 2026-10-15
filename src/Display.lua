@@ -1,6 +1,6 @@
 -- Full-screen status view: a table with one row per maintained entry, a panel with
--- the most recent log lines and a line listing the keys. Used when settings.display
--- is "table"; otherwise the maintainer prints a scrolling log.
+-- the most recent log lines and a line listing the keys. With settings.screen = "log"
+-- the maintainer prints a scrolling log instead.
 local component = require("component")
 local term = require("term")
 local unicode = require("unicode")
@@ -338,22 +338,76 @@ local function drawTable()
     end
 end
 
+-- Splits a log line into pieces of at most `width` characters, breaking at a space
+-- where there is one in the second half of the piece. The pieces after the first are
+-- indented to start below the text after the timestamp.
+local function wrapLine(line, width)
+    local stamp = line:match("^%[[%d:]+%] ")
+    local indent = (stamp and width - #stamp >= 20) and #stamp or math.min(2, width - 1)
+    local pieces = {}
+    local rest, room = line, width
+    while unicode.len(rest) > room do
+        local cut = nil
+        for p = room + 1, math.floor(room / 2) + 1, -1 do
+            if unicode.sub(rest, p, p) == " " then
+                cut = p
+                break
+            end
+        end
+        if cut then
+            table.insert(pieces, unicode.sub(rest, 1, cut - 1))
+            rest = unicode.sub(rest, cut + 1)
+        else
+            table.insert(pieces, unicode.sub(rest, 1, room))
+            rest = unicode.sub(rest, room + 1)
+        end
+        if #pieces == 1 then
+            room = width - indent
+        end
+    end
+    table.insert(pieces, rest)
+    for i = 2, #pieces do
+        pieces[i] = string.rep(" ", indent) .. pieces[i]
+    end
+    return pieces
+end
+
+local function logColor(line)
+    if line:find("ERROR", 1, true) then
+        return "red"
+    elseif line:find("WARNING", 1, true) then
+        return "orange"
+    end
+    return "white"
+end
+
 local function drawLog()
     local width, height, logLines, separatorY, tableRows = layout()
     local setColor = colorSetter()
-    local first = math.max(1, #Display.history - logLines + 1)
-    for i = 0, logLines - 1 do
-        local line = Display.history[first + i]
-        local y = separatorY + 1 + i
-        if line then
-            if line:find("ERROR", 1, true) then
-                setColor("red")
-            elseif line:find("WARNING", 1, true) then
-                setColor("orange")
-            else
-                setColor("white")
-            end
-            gpu.set(1, y, fit(line, width))
+    -- The newest log lines, each wrapped over as many screen lines as it needs. Like a
+    -- terminal, the oldest one may only show its end at the top of the panel.
+    local shown = {} -- {text, color}, newest last
+    local index = #Display.history
+    while index >= 1 and #shown < logLines do
+        local line = Display.history[index]
+        local pieces = wrapLine(line, width)
+        local color = logColor(line)
+        local room = logLines - #shown
+        local from = 1
+        if #pieces > room then
+            -- a single line longer than the whole panel shows its start, otherwise the end
+            from = #shown == 0 and 1 or #pieces - room + 1
+        end
+        for i = math.min(#pieces, from + room - 1), from, -1 do
+            table.insert(shown, 1, {pieces[i], color})
+        end
+        index = index - 1
+    end
+    for i = 1, logLines do
+        local y = separatorY + i
+        if shown[i] then
+            setColor(shown[i][2])
+            gpu.set(1, y, fit(shown[i][1], width))
         else
             gpu.fill(1, y, width, 1, " ")
         end

@@ -11,7 +11,7 @@ local ae2 = require("src.AE2")
 local display = require("src.Display")
 require("src.Utility") -- defines logInfo, setLogHandler, setTimeOffset and currentTime
 
--- config.lua and settings.lua are read with loadfile rather than require (which caches
+-- config.lua and settings.lua are read directly rather than with require (which caches
 -- until reboot), and reloaded whenever they are saved. Found the same way require would.
 local function findFile(module)
     local path = package.searchpath(module, package.path)
@@ -24,9 +24,77 @@ local KEY_HELP = "E edit config  S edit settings  R reload  Q quit"
 local KEY_HELP_SHORT = "E config  S settings  R reload  Q quit"
 local KEY_HELP_TINY = "E/S edit  R reload  Q quit"
 
+-- Numbers in config.lua and settings.lua can end in k, m, g/b or t: 250k, 10m, 1.5g
+local MULTIPLIERS = {k = 1e3, m = 1e6, g = 1e9, b = 1e9, t = 1e12}
+
+-- Writes numbers with a suffix out in full (250k -> 250000), so the text loads as Lua.
+-- Text in quotes ("64k ME Storage Cell") and comments is left alone. Returns nil and an
+-- error for something that starts like a number but isn't one, e.g. 5k0.
+local function expandSuffixes(text, name)
+    local out = {}
+    local i = 1
+    while i <= #text do
+        local c = text:sub(i, i)
+        local stop -- last character of the piece that starts at i
+        local replacement
+        if c == '"' or c == "'" then
+            stop = i + 1
+            while stop <= #text do
+                local d = text:sub(stop, stop)
+                if d == "\\" then
+                    stop = stop + 1 -- skip the escaped character
+                elseif d == c or d == "\n" then
+                    break
+                end
+                stop = stop + 1
+            end
+        elseif text:find("^%-%-", i) or text:find("^%[=*%[", i) then
+            local level = text:match("^%-%-%[(=*)%[", i) or text:match("^%[(=*)%[", i)
+            if level then -- --[[ long comment ]] or [[ long string ]]
+                local _, close = text:find("]" .. level .. "]", i + 2, true)
+                stop = close or #text
+            else -- comment up to the end of the line
+                stop = (text:find("\n", i, true) or (#text + 1)) - 1
+            end
+        elseif c:find("[%a_]") then
+            stop = select(2, text:find("^[%w_]+", i))
+        elseif c:find("%d") or text:find("^%.%d", i) then
+            stop = select(2, text:find("^[%w%.]+", i))
+            if text:sub(stop, stop):find("[eEpP]") and text:find("^[%+%-]", stop + 1) then
+                stop = select(2, text:find("^[%+%-][%w%.]*", stop + 1)) -- exponent with a sign: 1e+5
+            end
+            local token = text:sub(i, stop)
+            local number, suffix = token:match("^(%d+%.?%d*)([kKmMgGbBtT])$")
+            if number then
+                replacement = string.format("%.0f", tonumber(number) * MULTIPLIERS[suffix:lower()])
+            elseif not tonumber(token) then
+                local _, newlines = text:sub(1, i):gsub("\n", "")
+                return nil, string.format("%s:%d: '%s' is not a number (a number can end in k, m, g, b or t, like 250k or 1.5m)",
+                    name, newlines + 1, token)
+            end
+        else
+            stop = select(2, text:find("^[^%w_\"'%-%[%.]+", i)) or i
+        end
+        table.insert(out, replacement or text:sub(i, stop))
+        i = stop + 1
+    end
+    return table.concat(out)
+end
+
 -- Runs a Lua file that returns a table. Returns the table, or nil and an error message.
 local function loadTable(path)
-    local chunk, err = loadfile(path)
+    local file, openErr = io.open(path, "r")
+    if not file then
+        return nil, "can't open " .. path .. " (" .. tostring(openErr) .. ")"
+    end
+    local text = file:read("*a") or ""
+    file:close()
+    local name = path:match("[^/]+$") or path
+    local expanded, problem = expandSuffixes(text, name)
+    if not expanded then
+        return nil, problem
+    end
+    local chunk, err = load(expanded, "=" .. name, "t")
     if not chunk then
         return nil, tostring(err)
     end
@@ -49,17 +117,32 @@ local function buildSettings(userSettings, cfg)
         cpuName = nil,
         cacheDuration = 600,
         pollInterval = 1,
-        logSkips = true,
-        logRepeats = false,
         utcOffset = 0,
         reloadCheck = 0, -- live reload off; most players can't edit the file outside the game
-        display = "table",
+        screen = "fit",
         showRecent = true,
-        layout = "fit",
+        log = "changes",
         cpuDisplay = "free",
     }
-    for k, v in pairs(userSettings or {}) do
+    local user = userSettings or {}
+    for k, v in pairs(user) do
         s[k] = v
+    end
+    -- Older settings.lua files had display + layout instead of screen, and logSkips +
+    -- logRepeats instead of log
+    if user.screen == nil then
+        if user.display == "log" then
+            s.screen = "log"
+        elseif user.layout ~= nil then
+            s.screen = user.layout
+        end
+    end
+    if user.log == nil then
+        if user.logRepeats then
+            s.log = "all"
+        elseif user.logSkips == false then
+            s.log = "problems"
+        end
     end
     return s
 end
@@ -71,9 +154,9 @@ local configTime, settingsTime = nil, nil -- last-modified times of the loaded f
 
 local warnedNoTable = false
 
--- Switches between the status table and the scrolling log when settings.display changes
+-- Switches between the status table and the scrolling log when settings.screen changes
 local function updateDisplayMode()
-    local wantTable = settings.display ~= "log"
+    local wantTable = settings.screen ~= "log"
     if wantTable and not display.isActive() then
         if not display.start() and not warnedNoTable then
             local reason = display.failure()
@@ -94,7 +177,7 @@ local function applySettings(cfg)
     ae2.configure(settings)
     setTimeOffset(settings.utcOffset)
     display.setShowRecent(settings.showRecent ~= false)
-    display.setLayout(settings.layout)
+    display.setLayout(settings.screen)
     updateDisplayMode()
 end
 
@@ -130,10 +213,10 @@ local lastAmount = {} -- name -> last known amount in stock (entries with a thre
 local amountCycle = {} -- name -> the cycle in which lastAmount was read
 local cycleNumber = 0
 
--- logRepeats shows everything that happens, every cycle, in the status table's Recent
--- panel. The scrolling log (display = "log") always stays de-duplicated.
+-- log = "all" shows everything that happens, every cycle, in the status table's Recent
+-- panel. The scrolling log (screen = "log") always stays de-duplicated.
 local function showEverything()
-    return settings.logRepeats and display.isActive()
+    return settings.log == "all" and display.isActive()
 end
 
 -- Sets an entry's status and logs the message, unless the last status message logged
@@ -150,9 +233,9 @@ local function logStatus(name, status, message)
 end
 
 -- Skips (already crafting, stocked, waiting to retry, no CPU) are hidden entirely with
--- logSkips = false (unless logRepeats shows everything)
+-- log = "problems"
 local function skip(name, status, message)
-    if settings.logSkips or showEverything() then
+    if settings.log ~= "problems" or showEverything() then
         logStatus(name, status, message)
     else
         currentStatus[name] = status
@@ -243,7 +326,7 @@ local function formatAmount(n)
     end
 end
 
--- Status text, color and the short text for settings.layout = "tall"
+-- Status text, color and the short text for the narrow columns of screen = "tall"
 local STATUS_TEXT = {
     crafting = {"crafting", "blue"},
     requested = {"requested", "yellow"},
@@ -420,10 +503,11 @@ end
 
 -- Reloads config.lua and settings.lua if they were saved since they were last read.
 -- A file with a mistake is reported and the previous version stays in use.
--- Returns true if anything was reloaded.
+-- Returns true if anything was reloaded, and true if any file was saved (even with a mistake).
 local function reloadIfChanged()
-    local reloaded = false
+    local reloaded, saved = false, false
     if filesystem.lastModified(SETTINGS_PATH) ~= settingsTime then
+        saved = true
         local ok, err = loadSettings()
         if ok then
             applySettings(lastConfig)
@@ -434,6 +518,7 @@ local function reloadIfChanged()
         end
     end
     if filesystem.lastModified(CONFIG_PATH) ~= configTime then
+        saved = true
         local cfg, err = readConfig()
         if cfg then
             local summary = describeChanges(lastConfig, cfg)
@@ -444,7 +529,7 @@ local function reloadIfChanged()
             logInfo("ERROR: config.lua has a mistake, keeping the previous config: " .. err)
         end
     end
-    return reloaded
+    return reloaded, saved
 end
 
 local nextReloadCheck = 0 -- uptime of the next check for edited files
@@ -525,7 +610,7 @@ local function waitForNextCycle()
                 warnedNoTable = false
                 updateDisplayMode()
             end
-            if not reloadIfChanged() then
+            if not select(2, reloadIfChanged()) then
                 logInfo("config.lua and settings.lua are unchanged.")
             end
             return
