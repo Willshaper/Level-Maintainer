@@ -35,6 +35,13 @@ settings.columns = "Name Stock Want Batch Status"
 settings.legend = true        -- without Status: a line under the table explains the colors (false = hide it)
 settings.shortNumbers = false -- true = 3-digit numbers (112M, 12.5k) instead of 4 (112.5M, 12.50k)
 
+-- Discord messages when crafts start failing or work again (needs an internet card).
+-- Anyone who can open this computer can read the webhook URL.
+settings.discordWebhook = ""   -- Discord webhook URL for notifications ("" = off)
+settings.discordName = ""      -- shown in each message, e.g. "Platline"
+settings.discordMention = ""   -- pinged on failures, e.g. "<@123456789>" ("" = nobody)
+settings.discordReminder = 0   -- hours between "still failing" reminders (0 = none)
+
 -- Advanced
 settings.requireFreeCpu = true -- only start a craft when a crafting CPU (or cpuName) is idle (false = request anyway)
 settings.cacheDuration = 600   -- seconds before a newly added pattern is noticed

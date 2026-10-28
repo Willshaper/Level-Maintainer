@@ -10,7 +10,7 @@ Fork of [Echoloquate/Level-Maintainer](https://github.com/Echoloquate/Level-Main
 ## Hardware
 
 - An OpenComputers computer: case, CPU, RAM, hard drive, EEPROM (Lua BIOS), GPU, screen and keyboard
-- An internet card (needed to download the scripts)
+- An internet card (needed to download the scripts, and for [Discord notifications](#discord-notifications))
 - An adapter touching a full-block ME interface on your network
 - A Crafting Monitor on every crafting CPU (used to see what is already being crafted)
 - Optional: a redstone card and a slow redstone clock, to turn the computer back on after a power loss (see [Auto-start and crash recovery](#auto-start-and-crash-recovery))
@@ -217,6 +217,10 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 | `columns` | `"Name Stock Want Batch Status"` | The status table's columns, left to right. See [Table columns](#table-columns). |
 | `legend` | `true` | With no `Status` column, show a line above the key help that explains the row colors (and symbols). `false` hides it. |
 | `shortNumbers` | `false` | `true` shows numbers with 3 digits (`112M`, `12.5k`) instead of 4 (`112.5M`, `12.50k`), one character narrower per number column. |
+| `discordWebhook` | `""` | Discord webhook URL for [Discord notifications](#discord-notifications). `""` = off. |
+| `discordName` | `""` | Shown in each Discord message, e.g. `"Platline"`, to tell several maintainers apart. |
+| `discordMention` | `""` | Who is pinged on failure messages, e.g. `"<@123456789>"` (a user), `"<@&123456789>"` (a role) or `"@here"`. `""` = nobody. |
+| `discordReminder` | `0` | Hours between "still failing" reminders for entries that stay failed. `0` = no reminders. |
 
 Advanced, at the bottom of `settings.lua`:
 
@@ -263,6 +267,27 @@ stocked  failed
 Older `settings.lua` files still work: `display` and `layout` are read as `screen`, and `logSkips = false` / `logRepeats = true` as `log = "problems"` / `"all"`.
 
 **!! Threshold has a performance impact -- only add it when necessary, and preferably not on mainnet !!**
+
+## Discord notifications
+
+With an internet card, the maintainer can post to a Discord channel through a webhook. In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. Put the URL in `settings.lua`:
+
+```lua
+settings.discordWebhook = "https://discord.com/api/webhooks/..."
+settings.discordName = "Platline"
+```
+
+It posts when something changes, never on every retry:
+
+- **Crafts failing** (red): an entry's request failed (AE2 refused it, e.g. missing resources), with the amount and AE2's reason, e.g. `Tantalum Dust x2048: missing resources`. Sent once; while the entry keeps failing nothing more is sent, unless `discordReminder` is set: then a **Still failing** reminder follows every `discordReminder` hours.
+- **Back to normal** (green): an entry that was reported as failing is requested, crafting or stocked again.
+- **Maintainer started** (gray): when the maintainer starts, with the number of entries. Useful to notice a restart after a power loss.
+
+Everything that changes in the same cycle goes in one message. An entry that keeps switching between failing and working is reported at most once every 30 minutes. `discordMention` is only pinged on failure and reminder messages, and nobody else is ever pinged (not even by an entry named `@everyone`). "Not craftable" entries and maintainer errors are not sent; they stay in the Recent log.
+
+The maintainer never waits for Discord: a message is sent in the background and checked on the next cycles. If Discord rejects the webhook (deleted, or a typo), one warning is logged and nothing more is sent until `settings.lua` is saved again. Without an internet card, or with HTTP disabled on the server, one warning is logged and the maintainer works as usual.
+
+**Keep the webhook URL private.** Anyone who has it can post in that channel. On a server, anyone who can open the computer can read `settings.lua`, so only use a webhook for a channel where that is acceptable. The maintainer never writes the URL to its log or screen.
 
 ## Changing the config while it runs
 

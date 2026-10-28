@@ -4,12 +4,13 @@ local filesystem = require("filesystem")
 local shell = require("shell")
 -- require keeps modules until a reboot; load them fresh so an update or an earlier
 -- status table failure doesn't carry over into this run
-for _, name in ipairs({"src.AE2", "src.Display", "src.Utility"}) do
+for _, name in ipairs({"src.AE2", "src.Discord", "src.Display", "src.Utility"}) do
     package.loaded[name] = nil
 end
 local ae2 = require("src.AE2")
+local discord = require("src.Discord")
 local display = require("src.Display")
-require("src.Utility") -- defines logInfo, setLogHandler, setTimeOffset and currentTime
+require("src.Utility") -- defines logInfo, setLogHandler, setTimeOffset, currentTime and realTime
 
 -- config.lua and settings.lua are read directly rather than with require (which caches
 -- until reboot), and reloaded whenever they are saved. Found the same way require would.
@@ -126,6 +127,10 @@ local function buildSettings(userSettings, cfg)
         columns = "Name Stock Want Batch Status",
         shortNumbers = false,
         legend = true,
+        discordWebhook = "", -- Discord messages off
+        discordName = "",
+        discordMention = "",
+        discordReminder = 0,
     }
     local user = userSettings or {}
     for k, v in pairs(user) do
@@ -185,6 +190,7 @@ local function applySettings(cfg)
     display.setLayout(settings.screen)
     local unknown = display.setColumns(settings.columns, settings.shortNumbers)
     display.setLegend(settings.legend ~= false)
+    discord.configure(settings)
     updateDisplayMode()
     -- Logged after the table has taken over the screen, so the warning shows in Recent
     if #unknown > 0 and settings.columns ~= warnedColumns then
@@ -207,7 +213,7 @@ end
 -- Runs fn protected so a component error (interface removed, stale craftable, ...)
 -- is logged and retried next cycle instead of killing the maintainer.
 local function try(fn, ...)
-    local ok, success, answer, result, amount = pcall(fn, ...)
+    local ok, success, answer, result, amount, reason, unit = pcall(fn, ...)
     if not ok then
         -- Ctrl+Alt+C raises "interrupted" from inside os.sleep; let it stop the script
         if success == "interrupted" then
@@ -217,7 +223,7 @@ local function try(fn, ...)
         ae2.clearCache()
         return false, nil, "error"
     end
-    return success, answer, result, amount
+    return success, answer, result, amount, reason, unit
 end
 
 local currentStatus = {} -- name -> what the entry is doing now (shown in the status table)
@@ -274,6 +280,29 @@ local function cpuAvailable()
     return freeCpus > 0
 end
 
+-- 11968656 -> "11.97M", or "12.0M" with settings.shortNumbers (3 digits)
+local function formatAmount(n)
+    if type(n) ~= "number" then
+        return "-"
+    end
+    local short = settings.shortNumbers == true
+    if n < (short and 1000 or 10000) then
+        return tostring(math.floor(n))
+    end
+    for _, unit in ipairs({{1e12, "T"}, {1e9, "G"}, {1e6, "M"}, {1e3, "k"}}) do
+        if n >= unit[1] then
+            local value = n / unit[1]
+            local format
+            if short then
+                format = value < 9.995 and "%.2f" or (value < 99.95 and "%.1f" or "%.0f")
+            else
+                format = value < 99.995 and "%.2f" or "%.1f"
+            end
+            return string.format(format, value) .. unit[2]
+        end
+    end
+end
+
 local function maintain(name, config, request)
     local now = computer.uptime()
     if itemsCrafting[name] == true then
@@ -283,7 +312,7 @@ local function maintain(name, config, request)
     elseif not cpuAvailable() then
         skip(name, "nocpu", name .. ": no free crafting CPU, skipping...")
     else
-        local success, answer, result, amount = try(request, name, config[1], config[2], config[3])
+        local success, answer, result, amount, reason, unit = try(request, name, config[1], config[2], config[3])
         if amount ~= nil then
             lastAmount[name] = amount
             amountCycle[name] = cycleNumber
@@ -299,6 +328,7 @@ local function maintain(name, config, request)
             end
             -- Logged every time; the retry wait that follows is covered by this message
             logInfo(answer)
+            discord.failed(name, formatAmount(config[2]) .. (unit and (" " .. unit) or ""), reason)
             currentStatus[name] = "retry"
             lastLogged[name] = "retry"
         elseif result == "error" then
@@ -319,29 +349,6 @@ local function maintain(name, config, request)
             if useNamedCpu then
                 cpuBusy[settings.cpuName] = true
             end
-        end
-    end
-end
-
--- 11968656 -> "11.97M", or "12.0M" with settings.shortNumbers (3 digits)
-local function formatAmount(n)
-    if type(n) ~= "number" then
-        return "-"
-    end
-    local short = settings.shortNumbers == true
-    if n < (short and 1000 or 10000) then
-        return tostring(math.floor(n))
-    end
-    for _, unit in ipairs({{1e12, "T"}, {1e9, "G"}, {1e6, "M"}, {1e3, "k"}}) do
-        if n >= unit[1] then
-            local value = n / unit[1]
-            local format
-            if short then
-                format = value < 9.995 and "%.2f" or (value < 99.95 and "%.1f" or "%.0f")
-            else
-                format = value < 99.995 and "%.2f" or "%.1f"
-            end
-            return string.format(format, value) .. unit[2]
         end
     end
 end
@@ -542,11 +549,13 @@ local function reloadIfChanged()
         saved = true
         local ok, err = loadSettings()
         if ok then
+            discord.reset() -- a rejected webhook is tried again
             applySettings(lastConfig)
             logInfo("Reloaded settings.lua")
             reloaded = true
         else
-            logInfo("ERROR: settings.lua has a mistake, keeping the previous settings: " .. err)
+            -- The error can quote the line with the mistake; the webhook URL stays out of the log
+            logInfo("ERROR: settings.lua has a mistake, keeping the previous settings: " .. discord.hideUrls(err))
         end
     end
     if filesystem.lastModified(CONFIG_PATH) ~= configTime then
@@ -686,6 +695,9 @@ local function run()
             end
         end
 
+        -- One Discord message with what changed this cycle (no ME calls)
+        discord.cycle(entries, currentStatus)
+
         nextCycleAt = computer.uptime() + settings.sleep
         render()
         display.endBatch()
@@ -732,7 +744,7 @@ local function main()
     local ok, err = loadSettings()
     applySettings(nil)
     if not ok then
-        logInfo("WARNING: could not load settings.lua, using defaults (" .. err .. ")")
+        logInfo("WARNING: could not load settings.lua, using defaults (" .. discord.hideUrls(err) .. ")")
     end
     if not display.isActive() then
         logInfo("Keys (between cycles): " .. KEY_HELP .. ". Ctrl+Alt+C also stops it.")
@@ -740,6 +752,7 @@ local function main()
 
     waitForInterface()
     loadInitialConfig()
+    discord.started(#entries)
 
     -- run() only ends by an error. Anything other than Ctrl+Alt+C or Q is logged and the
     -- loop restarts after a pause, so one unexpected error doesn't stop maintenance.
@@ -767,6 +780,7 @@ local ok, err = xpcall(main, function(msg)
     return debug.traceback(tostring(msg), 2)
 end)
 display.stop()
+discord.stop()
 if not ok then
     if err == "interrupted" then
         logInfo("Maintainer stopped.")

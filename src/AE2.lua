@@ -89,6 +89,7 @@ end
 
 -- requestItem and requestFluid return: success, message, result ("requested", "failed",
 -- "stocked" or "missing"), and the amount in stock when it was checked (threshold set).
+-- A failed request also returns AE2's reason and the unit ("mB" for fluids, nil for items).
 function AE2.requestItem(name, threshold, count, fluidName)
     local craftable, item = getCraftableForItem(name)
     local amount = nil
@@ -127,7 +128,7 @@ function AE2.requestItem(name, threshold, count, fluidName)
         if item.label == name then
             local ok, reason = submit(craftable, count)
             if not ok then
-                return false, "Failed to request " .. name .. " x " .. count .. " (" .. tostring(reason) .. ")", "failed", amount
+                return false, "Failed to request " .. name .. " x " .. count .. " (" .. tostring(reason) .. ")", "failed", amount, reason
             else
                 return true, "Requested " .. name .. " x " .. count, "requested", amount
             end
@@ -164,7 +165,7 @@ function AE2.requestFluid(name, threshold, count, fluidName)
 
         local ok, reason = submit(craftable, count)
         if not ok then
-            return false, "Failed to request " .. name .. " x " .. count .. " mB (" .. tostring(reason) .. ")", "failed", amount
+            return false, "Failed to request " .. name .. " x " .. count .. " mB (" .. tostring(reason) .. ")", "failed", amount, reason, "mB"
         else
             return true, "Requested " .. name .. " x " .. count .. " mB", "requested", amount
         end

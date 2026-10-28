@@ -9,15 +9,24 @@ end
 
 -- OC has no real-time clock and os.date() uses in-game time. Opening a file
 -- for writing stamps it with the server's real clock (UTC), so touch one in
--- /tmp and format its modification time instead.
-local function timestamp()
+-- /tmp and use its modification time instead.
+-- Returns seconds since 1970 (UTC), or nil if the clock can't be read.
+function realTime()
     local file = io.open(CLOCK_FILE, "w")
     if file then
         file:close()
         local modified = filesystem.lastModified(CLOCK_FILE)
         if modified and modified > 0 then
-            return os.date("%H:%M:%S", modified / 1000 + timeOffset)
+            return modified / 1000
         end
+    end
+    return nil
+end
+
+local function timestamp()
+    local now = realTime()
+    if now then
+        return os.date("%H:%M:%S", now + timeOffset)
     end
     return os.date("%H:%M:%S") -- in-game time as a fallback
 end
