@@ -267,6 +267,20 @@ local function mentionParts()
     return cut(text, 1000), {parse = parse, users = users, roles = roles}
 end
 
+-- Warns once about anything in settings.discordMention that can't ping, e.g. a plain
+-- "@Willshaper": Discord only pings user and role IDs, @here and @everyone
+local function checkMention()
+    if mention:match("^%s*%d+%s*$") then
+        return -- a bare user id
+    end
+    local rest = mention:gsub("<@[!&]?%d+>", ""):gsub("@everyone", ""):gsub("@here", "")
+    rest = rest:match("^%s*(.-)%s*$")
+    if rest ~= "" then
+        warn("discordMention", 'settings.discordMention: "' .. cut(rest, 40) .. '" won\'t ping anyone. Discord needs a user ID '
+            .. 'like "<@123456789>": Settings > Advanced > Developer Mode, then right-click the user > Copy User ID.')
+    end
+end
+
 -- Sending ---------------------------------------------------------------------------
 
 local function closeOpen()
@@ -452,6 +466,9 @@ Discord.configure = guarded(function(settings)
     url = newUrl
     name = type(settings.discordName) == "string" and settings.discordName or ""
     mention = type(settings.discordMention) == "string" and settings.discordMention or ""
+    if url ~= "" then
+        checkMention()
+    end
     reminder = tonumber(settings.discordReminder) or 0
     local list = type(settings.discordList) == "string" and settings.discordList:lower() or "blacklist"
     if list ~= "blacklist" and list ~= "whitelist" then

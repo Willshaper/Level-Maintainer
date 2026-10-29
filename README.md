@@ -219,7 +219,7 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 | `shortNumbers` | `false` | `true` shows numbers with 3 digits (`112M`, `12.5k`) instead of 4 (`112.5M`, `12.50k`), one character narrower per number column. |
 | `discordWebhook` | `""` | Discord webhook URL for [Discord notifications](#discord-notifications). `""` = off. |
 | `discordName` | `""` | Shown in each Discord message, e.g. `"Platline"`, to tell several maintainers apart. |
-| `discordMention` | `""` | Who is pinged on failure messages, e.g. `"<@123456789>"` (a user), `"<@&123456789>"` (a role) or `"@here"`. `""` = nobody. |
+| `discordMention` | `""` | Who is pinged on failure messages, e.g. `"<@123456789>"` (a user), `"<@&123456789>"` (a role) or `"@here"`. `""` = nobody. A name like `"@Willshaper"` doesn't ping (one warning is logged): get the ID in Discord with Settings, Advanced, Developer Mode, then right-click the user and Copy User ID. |
 | `discordReminder` | `0` | Hours between "still failing" reminders for entries that stay failed. `0` = no reminders. |
 | `discordList` | `"blacklist"` | Which entries' failures are sent. `"blacklist"`: all entries except the ones marked `Discord` in `config.lua`. `"whitelist"`: only the marked ones. See [Choosing which entries are sent](#choosing-which-entries-are-sent). |
 
