@@ -95,6 +95,7 @@
   tbody tr.editing { background: var(--row-active); }
   tbody tr.off td.name, tbody tr.off td.num, tbody tr.off td.fluid { color: var(--text-dimmer); text-decoration: line-through; }
   td.on, th.on { width: 34px; text-align: center; }
+  td.mark, th.mark { width: 64px; text-align: center; }
   td.del { width: 40px; text-align: right; }
   input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--teal); cursor: pointer; }
   .empty { color: var(--text-dimmer); padding: 14px 8px; text-align: center; }
@@ -195,6 +196,7 @@
       <p><b>Name</b>: the item or fluid exactly as the game shows it. Hover it in NEI and press <kbd>Ctrl+C</kbd> to copy its name, then paste it here with <kbd>Ctrl+V</kbd>. Quotes are optional.</p>
       <p><b>Maintain</b>: keep at least this many in the ME system (fluids in mB). Leave it empty or 0 to always keep one batch crafting.</p>
       <p><b>Batch Amount</b>: how many to request at once.</p>
+      <p><b>Discord</b> (in the list below): adds <code>Discord</code> to the line. With Discord notifications on, <code>settings.discordList</code> says what it means: <code>"blacklist"</code> (default) = marked entries are not sent, <code>"whitelist"</code> = only marked entries are sent.</p>
       <p>Amounts can end in <code>k</code> (thousand), <code>m</code> (million), <code>g</code> or <code>b</code> (billion) and <code>t</code> (trillion): <code>250k</code> = 250,000, <code>1.5m</code> = 1,500,000. Separators work too: <code>1,024</code>.</p>
     </div>
   </section>
@@ -206,6 +208,7 @@
         <thead>
           <tr>
             <th class="on" title="Untick to disable: the entry stays here but is written commented out with --">On</th>
+            <th class="mark" title="Tick to add Discord to the line (settings.discordList: blacklist = not sent, whitelist = only these are sent)">Discord</th>
             <th>Name</th>
             <th class="num">Maintain</th>
             <th class="num">Batch</th>
@@ -216,7 +219,7 @@
         <tbody id="entries"></tbody>
       </table>
     </div>
-    <p class="note">Click an entry to edit it. Untick <b>On</b> to disable an entry: it stays in the list but is written commented out (<code>--</code>), so the maintainer skips it.</p>
+    <p class="note">Click an entry to edit it. Untick <b>On</b> to disable an entry: it stays in the list but is written commented out (<code>--</code>), so the maintainer skips it. Tick <b>Discord</b> to mark an entry for Discord notifications: <code>["Titanium Ingot"] = {nil, 64, Discord},</code></p>
   </section>
 
   <section>
@@ -328,15 +331,16 @@ function makeEntry(name, maintain, batch, fluid = '') {
   if (threshold === null) throw new Error('Maintain must be a whole number, like 512, 10k or 1.5m (empty or 0 = no threshold).');
   const count = parseAmount(batch);
   if (count === null || count === 0) throw new Error('Batch Amount must be a whole number above 0, like 64 or 1k.');
-  return { name: clean, threshold, count, fluid: stripQuotes(fluid), enabled: true };
+  return { name: clean, threshold, count, fluid: stripQuotes(fluid), enabled: true, discord: false };
 }
 
 function luaString(s) { return '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"'; }
 
 // 0 threshold = nil. A disabled entry is commented out: --    ["Tantalum Dust"] = {nil, 2048},
+// A marked entry ends in Discord (no quotes): ["Titanium Ingot"] = {nil, 64, Discord},
 function formatEntry(e) {
   const threshold = e.threshold === 0 ? 'nil' : formatAmount(e.threshold);
-  const extra = e.fluid ? ', ' + luaString(e.fluid) : '';
+  const extra = (e.fluid ? ', ' + luaString(e.fluid) : '') + (e.discord ? ', Discord' : '');
   const line = `    [${luaString(e.name)}] = {${threshold}, ${formatAmount(e.count)}${extra}},`;
   return e.enabled === false ? '--' + line : line;
 }
@@ -353,8 +357,9 @@ function formatConfigFile(entries) {
 }
 
 // Lines like ["Name"] = {512, 1024},  ["Acid"] = {10m, 4m},  ["drop of X"] = {nil, 1, "x"},
-// A line commented out with -- comes in disabled; anything else is ignored.
-const LINE_PATTERN = /^\s*(--\s*)?\[\s*"((?:[^"\\]|\\.)*)"\s*\]\s*=\s*\{\s*(nil|\d[\d.]*[kmgbt]?)\s*,\s*(\d[\d.]*[kmgbt]?)\s*(?:,\s*"((?:[^"\\]|\\.)*)"\s*)?\}\s*[,;]?\s*(?:--.*)?$/i;
+// ["Titanium Ingot"] = {nil, 64, Discord},  A line commented out with -- comes in disabled;
+// anything else is ignored.
+const LINE_PATTERN = /^\s*(--\s*)?\[\s*"((?:[^"\\]|\\.)*)"\s*\]\s*=\s*\{\s*(nil|\d[\d.]*[kmgbt]?)\s*,\s*(\d[\d.]*[kmgbt]?)\s*(?:,\s*"((?:[^"\\]|\\.)*)"\s*)?(?:,\s*(discord)\s*)?\}\s*[,;]?\s*(?:--.*)?$/i;
 function importText(text) {
   const unescape = s => s.replace(/\\(.)/g, '$1');
   const found = [];
@@ -364,7 +369,7 @@ function importText(text) {
     const threshold = m[3].toLowerCase() === 'nil' ? 0 : parseAmount(m[3], true);
     const count = parseAmount(m[4], true);
     if (threshold === null || count === null || count === 0) continue;
-    found.push({ name: unescape(m[2]), threshold, count, fluid: m[5] ? unescape(m[5]) : '', enabled: !m[1] });
+    found.push({ name: unescape(m[2]), threshold, count, fluid: m[5] ? unescape(m[5]) : '', enabled: !m[1], discord: !!m[6] });
   }
   return found;
 }
@@ -400,7 +405,8 @@ function cleanEntry(raw) {
   const count = Number(raw.count ?? raw.Count ?? 0);
   if (!name || !Number.isSafeInteger(threshold) || threshold < 0 || !Number.isSafeInteger(count) || count <= 0) return null;
   const enabled = raw.enabled ?? raw.Enabled;
-  return { name, threshold, count, fluid: String(raw.fluid ?? raw.Fluid ?? ''), enabled: enabled !== false };
+  const discord = raw.discord ?? raw.Discord;
+  return { name, threshold, count, fluid: String(raw.fluid ?? raw.Fluid ?? ''), enabled: enabled !== false, discord: discord === true };
 }
 
 function cleanEntries(list) { return (Array.isArray(list) ? list : []).map(cleanEntry).filter(Boolean); }
@@ -476,6 +482,15 @@ function renderEntries() {
     box.title = 'Untick to disable (written commented out)';
     box.setAttribute('aria-label', `Enable ${e.name}`);
     on.append(box);
+    const mark = document.createElement('td');
+    mark.className = 'mark';
+    const markBox = document.createElement('input');
+    markBox.type = 'checkbox';
+    markBox.className = 'discord';
+    markBox.checked = e.discord === true;
+    markBox.title = 'Tick to add Discord to the line (settings.discordList: blacklist = not sent, whitelist = only these are sent)';
+    markBox.setAttribute('aria-label', `Mark ${e.name} for Discord`);
+    mark.append(markBox);
     const cell = (text, cls) => { const td = document.createElement('td'); td.className = cls; td.textContent = text; return td; };
     const del = document.createElement('td');
     del.className = 'del';
@@ -485,14 +500,14 @@ function renderEntries() {
     delButton.title = `Delete ${e.name}`;
     delButton.setAttribute('aria-label', `Delete ${e.name}`);
     del.append(delButton);
-    tr.append(on, cell(e.name, 'name'), cell(e.threshold === 0 ? 'nil' : formatAmount(e.threshold), 'num'),
+    tr.append(on, mark, cell(e.name, 'name'), cell(e.threshold === 0 ? 'nil' : formatAmount(e.threshold), 'num'),
       cell(formatAmount(e.count), 'num'), cell(e.fluid, 'fluid'), del);
     return tr;
   });
   if (rows.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 7;
     td.className = 'empty';
     td.textContent = 'No entries yet. Add one above, or use Import lines.';
     tr.append(td);
@@ -598,9 +613,12 @@ function download(filename, text, type) {
 }
 
 // ─── Form ────────────────────────────────────────────────────────────────
-// An edited entry keeps the drop fluid name it was imported with
+// An edited entry keeps the drop fluid name it was imported with, and its Discord mark
 function editedFluid() {
   return editIndex >= 0 ? currentList().entries[editIndex].fluid : '';
+}
+function editedDiscord() {
+  return editIndex >= 0 && currentList().entries[editIndex].discord === true;
 }
 
 $('entry-form').addEventListener('submit', ev => {
@@ -613,11 +631,13 @@ $('entry-form').addEventListener('submit', ev => {
     if (editIndex >= 0) {
       if (existing >= 0 && existing !== editIndex) throw new Error(`"${entry.name}" is already in the list. Click that entry to change it.`);
       entry.enabled = list.entries[editIndex].enabled;
+      entry.discord = list.entries[editIndex].discord;
       list.entries[editIndex] = entry;
       message = `Updated ${entry.name}.`;
     } else if (existing >= 0) {
       entry.enabled = list.entries[existing].enabled;
       entry.fluid = list.entries[existing].fluid;
+      entry.discord = list.entries[existing].discord;
       list.entries[existing] = entry;
       message = `${entry.name} was already in the list; updated it.`;
     } else {
@@ -645,7 +665,9 @@ document.addEventListener('keydown', ev => {
 
 $('copy-line-btn').addEventListener('click', async () => {
   try {
-    const line = formatEntry(makeEntry(nameBox.value, maintainBox.value, batchBox.value, editedFluid()));
+    const entry = makeEntry(nameBox.value, maintainBox.value, batchBox.value, editedFluid());
+    entry.discord = editedDiscord();
+    const line = formatEntry(entry);
     if (await copyText(line)) setStatus('Copied: ' + line.trim());
     else setStatus('Could not copy; select the line in the preview and copy it by hand.', true);
   } catch (e) {
@@ -660,6 +682,13 @@ $('entries').addEventListener('click', ev => {
   const index = Number(tr.dataset.index);
   const list = currentList();
   const entry = list.entries[index];
+  if (ev.target.matches('input.discord')) {
+    entry.discord = ev.target.checked;
+    saveState();
+    render();
+    setStatus(entry.discord ? `Marked ${entry.name} for Discord: the line ends in Discord.` : `Removed the Discord mark from ${entry.name}.`);
+    return;
+  }
   if (ev.target.matches('input[type=checkbox]')) {
     entry.enabled = ev.target.checked;
     saveState();
@@ -774,7 +803,7 @@ $('import-ok').addEventListener('click', () => {
 // ─── Backup file ─────────────────────────────────────────────────────────
 // Entries use the PowerShell tool's field names, so its configs.json and these files match
 function exportEntries(entries) {
-  return entries.map(e => ({ Name: e.name, Threshold: e.threshold, Count: e.count, Fluid: e.fluid, Enabled: e.enabled !== false }));
+  return entries.map(e => ({ Name: e.name, Threshold: e.threshold, Count: e.count, Fluid: e.fluid, Enabled: e.enabled !== false, Discord: e.discord === true }));
 }
 
 $('export').addEventListener('click', () => {
@@ -811,7 +840,7 @@ $('file-input').addEventListener('change', async ev => {
 });
 
 // ─── Share link ──────────────────────────────────────────────────────────
-// The list goes in the link after #share= as base64url JSON: {n: name, e: [[name, threshold, count, fluid, on]]}
+// The list goes in the link after #share= as base64url JSON: {n: name, e: [[name, threshold, count, fluid, on, discord]]}
 function toBase64Url(text) {
   const bytes = new TextEncoder().encode(text);
   let binary = '';
@@ -825,7 +854,7 @@ function fromBase64Url(text) {
 
 $('share').addEventListener('click', async () => {
   const list = currentList();
-  const payload = { n: list.name, e: list.entries.map(e => [e.name, e.threshold, e.count, e.fluid, e.enabled === false ? 0 : 1]) };
+  const payload = { n: list.name, e: list.entries.map(e => [e.name, e.threshold, e.count, e.fluid, e.enabled === false ? 0 : 1, e.discord ? 1 : 0]) };
   const link = location.origin + location.pathname + '#share=' + toBase64Url(JSON.stringify(payload));
   if (await copyText(link)) setStatus(`Copied a share link for "${list.name}" (${list.entries.length} entries, ${link.length} characters).`);
   else setStatus('Could not copy the link.', true);
@@ -843,7 +872,7 @@ function readShareLink() {
   try {
     const payload = JSON.parse(fromBase64Url(match[1]));
     const entries = cleanEntries((payload.e || []).map(a => Array.isArray(a)
-      ? { name: a[0], threshold: a[1], count: a[2], fluid: a[3] || '', enabled: a[4] !== 0 } : null));
+      ? { name: a[0], threshold: a[1], count: a[2], fluid: a[3] || '', enabled: a[4] !== 0, discord: a[5] === 1 } : null));
     sharedList = { name: String(payload.n || 'Shared list'), entries };
     $('share-text').textContent = `This link contains the list "${sharedList.name}" with ${entries.length} entries.`;
     $('share-banner').classList.remove('hidden');

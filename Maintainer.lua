@@ -82,8 +82,32 @@ local function expandSuffixes(text, name)
     return table.concat(out)
 end
 
+-- An entry in config.lua marked for settings.discordList: ["Titanium Ingot"] = {nil, 64, Discord}
+local DISCORD_MARK = setmetatable({}, {__tostring = function() return "Discord" end})
+
+-- The fluid name of an entry (3rd value, for ae2fc drops), or nil
+local function fluidName(conf)
+    return type(conf[3]) == "string" and conf[3] or nil
+end
+
+-- Whether an entry is marked Discord (after the batch size, or after the fluid name)
+local function discordMarked(conf)
+    return conf[3] == DISCORD_MARK or conf[4] == DISCORD_MARK
+end
+
+-- The words config.lua may use without quotes. Any other unknown word is an error, so a
+-- typo like Discrod isn't silently read as nothing (Lua would make it nil).
+local CONFIG_WORDS = setmetatable({Discord = DISCORD_MARK, discord = DISCORD_MARK}, {__index = function(_, key)
+    local value = _G[key]
+    if value == nil then
+        error("unknown word '" .. tostring(key) .. "' (put names in quotes; Discord is the only word without them)", 2)
+    end
+    return value
+end})
+
 -- Runs a Lua file that returns a table. Returns the table, or nil and an error message.
-local function loadTable(path)
+-- `words`: the global variables the file sees (default: all of them)
+local function loadTable(path, words)
     local file, openErr = io.open(path, "r")
     if not file then
         return nil, "can't open " .. path .. " (" .. tostring(openErr) .. ")"
@@ -95,7 +119,7 @@ local function loadTable(path)
     if not expanded then
         return nil, problem
     end
-    local chunk, err = load(expanded, "=" .. name, "t")
+    local chunk, err = load(expanded, "=" .. name, "t", words or _G)
     if not chunk then
         return nil, tostring(err)
     end
@@ -131,6 +155,7 @@ local function buildSettings(userSettings, cfg)
         discordName = "",
         discordMention = "",
         discordReminder = 0,
+        discordList = "blacklist",
     }
     local user = userSettings or {}
     for k, v in pairs(user) do
@@ -312,7 +337,7 @@ local function maintain(name, config, request)
     elseif not cpuAvailable() then
         skip(name, "nocpu", name .. ": no free crafting CPU, skipping...")
     else
-        local success, answer, result, amount, reason, unit = try(request, name, config[1], config[2], config[3])
+        local success, answer, result, amount, reason, unit = try(request, name, config[1], config[2], fluidName(config))
         if amount ~= nil then
             lastAmount[name] = amount
             amountCycle[name] = cycleNumber
@@ -435,11 +460,13 @@ local function render(title)
     display.update(rows, title or headerParts(), KEY_HELP, KEY_HELP_SHORT, KEY_HELP_TINY)
 end
 
-local function sameEntry(a, b)
+-- withMark = false compares only what is crafted, not the Discord mark
+local function sameEntry(a, b, withMark)
     if type(a) ~= "table" or type(b) ~= "table" then
         return a == b
     end
-    return a[1] == b[1] and a[2] == b[2] and a[3] == b[3]
+    return a[1] == b[1] and a[2] == b[2] and fluidName(a) == fluidName(b)
+        and (withMark == false or discordMarked(a) == discordMarked(b))
 end
 
 -- Returns nil if a config entry is usable, otherwise what is wrong with it
@@ -456,8 +483,14 @@ local function entryProblem(name, conf)
     if type(conf[2]) ~= "number" or conf[2] < 1 then
         return "the batch size must be a number of at least 1"
     end
-    if conf[3] ~= nil and type(conf[3]) ~= "string" then
-        return "the third value (fluid name) must be text in quotes"
+    if conf[3] ~= nil and type(conf[3]) ~= "string" and conf[3] ~= DISCORD_MARK then
+        return "the third value must be a fluid name in quotes or Discord"
+    end
+    if conf[4] ~= nil and (conf[4] ~= DISCORD_MARK or fluidName(conf) == nil) then
+        return "a fourth value can only be Discord, after a fluid name"
+    end
+    if conf[5] ~= nil then
+        return "too many values; it should look like {threshold, batch_size} or {threshold, batch_size, Discord}"
     end
     return nil
 end
@@ -495,7 +528,8 @@ local function describeChanges(old, new)
             elseif not sameEntry(prev, conf) then
                 changed = changed + 1
             end
-            if not prev or not sameEntry(prev, conf) then
+            -- Only a change in what is crafted starts the entry over (not the Discord mark)
+            if not prev or not sameEntry(prev, conf, false) then
                 currentStatus[name] = nil
                 lastLogged[name] = nil
                 retryAt[name] = nil
@@ -522,10 +556,10 @@ local function applyConfig(cfg)
 
     entries = {}
     for name, conf in pairs(items) do
-        table.insert(entries, {name = name, config = conf, request = ae2.requestItem})
+        table.insert(entries, {name = name, config = conf, request = ae2.requestItem, discord = discordMarked(conf)})
     end
     for name, conf in pairs(fluids or {}) do
-        table.insert(entries, {name = name, config = conf, request = ae2.requestFluid})
+        table.insert(entries, {name = name, config = conf, request = ae2.requestFluid, discord = discordMarked(conf)})
     end
     table.sort(entries, function(a, b) return a.name < b.name end)
 
@@ -537,7 +571,7 @@ end
 -- modification time either way, so a broken file is only reported once per save.
 local function readConfig()
     configTime = filesystem.lastModified(CONFIG_PATH)
-    return loadTable(CONFIG_PATH)
+    return loadTable(CONFIG_PATH, CONFIG_WORDS)
 end
 
 -- Reloads config.lua and settings.lua if they were saved since they were last read.

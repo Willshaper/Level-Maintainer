@@ -41,6 +41,8 @@ settings.discordWebhook = ""   -- Discord webhook URL for notifications ("" = of
 settings.discordName = ""      -- shown in each message, e.g. "Platline"
 settings.discordMention = ""   -- pinged on failures, e.g. "<@123456789>" ("" = nobody)
 settings.discordReminder = 0   -- hours between "still failing" reminders (0 = none)
+settings.discordList = "blacklist" -- which entries are sent; mark them in config.lua: {nil, 64, Discord}
+                               -- "blacklist" = all except marked ones, "whitelist" = only marked ones
 
 -- Advanced
 settings.requireFreeCpu = true -- only start a craft when a crafting CPU (or cpuName) is idle (false = request anyway)

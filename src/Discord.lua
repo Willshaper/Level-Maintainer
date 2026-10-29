@@ -28,6 +28,7 @@ local WORKING = {requested = true, crafting = true, stocked = true}
 
 -- From settings.lua, via Discord.configure()
 local url, name, mention, reminder = "", "", "", 0
+local whitelist = false -- settings.discordList: true = only entries marked Discord, false = all but them
 
 local cardChecked = false -- whether the internet card was checked since settings.lua was loaded
 local cardOk = false
@@ -452,6 +453,14 @@ Discord.configure = guarded(function(settings)
     name = type(settings.discordName) == "string" and settings.discordName or ""
     mention = type(settings.discordMention) == "string" and settings.discordMention or ""
     reminder = tonumber(settings.discordReminder) or 0
+    local list = type(settings.discordList) == "string" and settings.discordList:lower() or "blacklist"
+    if list ~= "blacklist" and list ~= "whitelist" then
+        if url ~= "" then
+            warn("discordList", 'settings.discordList should be "blacklist" or "whitelist"; using "blacklist".')
+        end
+        list = "blacklist"
+    end
+    whitelist = list == "whitelist"
     if url == "" then
         queue, failing, startedEntries = {}, {}, nil
     end
@@ -489,12 +498,17 @@ Discord.cycle = guarded(function(entries, statuses)
 
     local newFailures, reminders, recovered = {}, {}, {}
     local listed = {}
+    local anyMarked = false
     for _, entry in ipairs(entries) do
         local entryName = entry.name
         local status = statuses[entryName]
         local state = failing[entryName]
         listed[entryName] = true
-        if status == "retry" then
+        anyMarked = anyMarked or entry.discord == true
+        -- settings.discordList: whitelist = only entries marked Discord, blacklist = all but them
+        if (entry.discord == true) ~= whitelist then
+            failing[entryName] = nil -- reported as new if it is switched back on while failing
+        elseif status == "retry" then
             if not state then
                 state = {since = now, reported = false}
                 failing[entryName] = state
@@ -517,6 +531,9 @@ Discord.cycle = guarded(function(entries, statuses)
             end
             failing[entryName] = nil
         end
+    end
+    if whitelist and not anyMarked and #entries > 0 then
+        warn("discordNoneMarked", 'settings.discordList is "whitelist", but no entry in config.lua is marked Discord; only "Maintainer started" is sent.')
     end
     -- Entries removed from config.lua are forgotten
     for entryName in pairs(failing) do

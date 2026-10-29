@@ -184,7 +184,7 @@ cfg["items"] = {
 }
 ```
 
-Pattern: `["item_label"] = {threshold, batch_size, fluid_name?}`. The third value is only needed for `ae2fc:fluid_drop` items and is the fluid's registry name -- this path works on any GTNH version.
+Pattern: `["item_label"] = {threshold, batch_size, fluid_name?, Discord?}`. The fluid name is only needed for `ae2fc:fluid_drop` items and is the fluid's registry name -- this path works on any GTNH version. `Discord` marks the entry for [Discord notifications](#choosing-which-entries-are-sent).
 
 Numbers can end in `k` (thousand), `m` (million), `g` or `b` (billion) and `t` (trillion), e.g. `["Nitric Acid"] = {250m, 40m}` or `{1.5k, 500}`. Names in quotes are never changed, so `["64k ME Storage Cell"]` stays as it is.
 
@@ -221,6 +221,7 @@ Timing and behaviour live in `settings.lua` (anything missing falls back to a de
 | `discordName` | `""` | Shown in each Discord message, e.g. `"Platline"`, to tell several maintainers apart. |
 | `discordMention` | `""` | Who is pinged on failure messages, e.g. `"<@123456789>"` (a user), `"<@&123456789>"` (a role) or `"@here"`. `""` = nobody. |
 | `discordReminder` | `0` | Hours between "still failing" reminders for entries that stay failed. `0` = no reminders. |
+| `discordList` | `"blacklist"` | Which entries' failures are sent. `"blacklist"`: all entries except the ones marked `Discord` in `config.lua`. `"whitelist"`: only the marked ones. See [Choosing which entries are sent](#choosing-which-entries-are-sent). |
 
 Advanced, at the bottom of `settings.lua`:
 
@@ -282,6 +283,22 @@ It posts when something changes, never on every retry:
 - **Crafts failing** (red): an entry's request failed (AE2 refused it, e.g. missing resources), with the amount and AE2's reason, e.g. `Tantalum Dust x2048: missing resources`. Sent once; while the entry keeps failing nothing more is sent, unless `discordReminder` is set: then a **Still failing** reminder follows every `discordReminder` hours.
 - **Back to normal** (green): an entry that was reported as failing is requested, crafting or stocked again.
 - **Maintainer started** (gray): when the maintainer starts, with the number of entries. Useful to notice a restart after a power loss.
+
+### Choosing which entries are sent
+
+Mark an entry by adding `Discord` (no quotes) after its batch size, or after the fluid name of a drop entry:
+
+```lua
+["Titanium Ingot"] = {nil, 64, Discord},
+["drop of Molten SpaceTime"] = {1m, 1, "spacetime", Discord},
+```
+
+`settings.discordList` says what the mark means:
+
+- `"blacklist"` (default): every entry is sent except the marked ones. With nothing marked, everything is sent.
+- `"whitelist"`: only the marked entries are sent, e.g. the few that must always run.
+
+"Maintainer started" is always sent. A misspelled word like `Discrod` is reported as a mistake in `config.lua` instead of being ignored. Older versions of the maintainer read `Discord` as nothing, so a marked `config.lua` still works with them (without the filtering).
 
 Everything that changes in the same cycle goes in one message. An entry that keeps switching between failing and working is reported at most once every 30 minutes. `discordMention` is only pinged on failure and reminder messages, and nobody else is ever pinged (not even by an entry named `@everyone`). "Not craftable" entries and maintainer errors are not sent; they stay in the Recent log.
 
