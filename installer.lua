@@ -1,7 +1,8 @@
 local shell = require("shell")
 local filesystem = require("filesystem")
 local component = require("component")
-local scripts = {"src/AE2.lua", "src/Discord.lua", "src/Display.lua", "src/Utility.lua", "Maintainer.lua"}
+local scripts = {"src/AE2.lua", "src/Discord.lua", "src/Display.lua", "src/Utility.lua", "Maintainer.lua", "Update.lua"}
+local args = {...} -- from Update: the commit id and date to install
 
 local repo = "https://raw.githubusercontent.com/Willshaper/Level-Maintainer/";
 local api = "https://api.github.com/repos/Willshaper/Level-Maintainer/commits/";
@@ -10,23 +11,33 @@ local dir = shell.getWorkingDirectory()
 
 -- GitHub caches each file on a branch for up to 5 minutes, so right after an update
 -- some downloads could be old and others new. Downloading from the latest commit's
--- id instead always gives one matching set. Returns nil if it can't be looked up.
+-- id instead always gives one matching set. Returns the id and date, or nil if they
+-- can't be looked up.
 local function latestCommit()
-    local ok, sha = pcall(function()
+    local ok, sha, date = pcall(function()
         local internet = require("internet")
         local body = ""
         for chunk in internet.request(api .. branch, nil, {["User-Agent"] = "Level-Maintainer installer"}) do
             body = body .. chunk
             if #body > 2048 then
-                break -- the commit id is at the start of the response
+                break -- the commit id and date are at the start of the response
             end
         end
-        return body:match('"sha"%s*:%s*"(%x+)"')
+        return body:match('"sha"%s*:%s*"(%x+)"'), body:match('"date"%s*:%s*"([^"]+)"')
     end)
-    return ok and sha or nil
+    if ok then
+        return sha, date
+    end
+    return nil
 end
 
-local ref = latestCommit()
+-- Update already looked up the version (GitHub allows few lookups per hour)
+local ref, refDate
+if args[1] and args[1]:match("^%x+$") then
+    ref, refDate = args[1], args[2]
+else
+    ref, refDate = latestCommit()
+end
 if ref then
     print("Installing version " .. ref:sub(1, 7))
 else
@@ -110,6 +121,15 @@ end
 for _, file in ipairs(wanted) do
     filesystem.remove(path(file))
     filesystem.rename(temp(file), path(file))
+end
+
+-- The installed version, for Update to compare with the newest one
+if ref ~= branch then
+    local file = io.open(path(".version"), "w")
+    if file then
+        file:write(ref .. "\n" .. (refDate or "") .. "\n")
+        file:close()
+    end
 end
 
 local function ask(question)
@@ -266,6 +286,8 @@ if component.isAvailable("redstone") then
     end
 end
 
+print()
+print("To update later, stop the maintainer (Q) and run: Update")
 print("Rebooting...")
 os.sleep(2)
 shell.execute("reboot");

@@ -26,7 +26,7 @@ The maintainer runs on OpenOS, so install it to the hard drive first:
 
 # Installation
 
-Download it (run the same command again later to update)
+Download it
 
 ```bash
 wget -f https://raw.githubusercontent.com/Willshaper/Level-Maintainer/master/installer.lua && installer
@@ -46,7 +46,19 @@ Run it from the folder you installed to (not needed if auto-start is on)
 Maintainer
 ```
 
-Stop it by pressing Q, or holding Ctrl+Alt+C for a second. Crafts already sent to AE2 keep running.
+Stop it by pressing Q, or holding Ctrl+Alt+C for a second. Crafts already sent to AE2 keep running. When it stops, it lists the commands you can run.
+
+## Updating
+
+Stop the maintainer (Q) and run, from the folder you installed to:
+
+```bash
+Update
+```
+
+It shows the installed version and the newest one on GitHub (for example `Installed: ffc90e6 (2026-10-29)` and `Latest: 62cae54 (2026-10-30) Discord settings...`) and asks whether to update. If you already have the newest version, it asks whether to reinstall it anyway. Updating runs the installer, so `config.lua` and `settings.lua` are kept and it reboots at the end.
+
+`Update` comes with the installer from this version on; if you don't have it yet, run the installer command above once more.
 
 # Screen and keys
 

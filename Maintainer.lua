@@ -18,6 +18,8 @@ local function findFile(module)
     local path = package.searchpath(module, package.path)
     return path and shell.resolve(path) or shell.resolve(module .. ".lua")
 end
+-- The folder this program is in (OpenOS puts the running program's path in "_")
+local PROGRAM_FOLDER = os.getenv("_") and filesystem.path(os.getenv("_")) or nil
 local CONFIG_PATH = findFile("config")
 local SETTINGS_PATH = findFile("settings")
 local STARTUP_CHECK = 2 -- seconds between checks while waiting for a broken config.lua to be fixed
@@ -818,6 +820,16 @@ discord.stop()
 if not ok then
     if err == "interrupted" then
         logInfo("Maintainer stopped.")
+        -- What can be run from here; Update exists since it came with the installer
+        local folder = PROGRAM_FOLDER or filesystem.path(CONFIG_PATH) or ""
+        if folder:sub(-1) ~= "/" then
+            folder = folder .. "/"
+        end
+        local hint = "Commands: Maintainer = start it again"
+        if filesystem.exists(folder .. "Update.lua") then
+            hint = hint .. ", Update = check for a new version"
+        end
+        print(hint)
     else
         error(err, 0)
     end
