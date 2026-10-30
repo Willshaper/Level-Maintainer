@@ -36,7 +36,7 @@ local disabled = false -- Discord rejected the webhook; off until settings.lua i
 local warned = {} -- warnings already logged, so each shows once
 
 local failures = {} -- name -> {amount, reason} of the entry's last failed request
-local failing = {} -- name -> {since, reported, lastSent} for entries failing now
+local failing = {} -- name -> {since, reported, lastSent} (real seconds) for entries failing now
 local lastReport = {} -- name -> uptime of its last "failing" message (kept after it recovers)
 local startedEntries = nil -- entry count for the "started" message, sent with the first cycle
 
@@ -227,6 +227,19 @@ local function listText(lines)
         text = text .. (i > 1 and "\n" or "") .. line
     end
     return text
+end
+
+-- Real seconds (the server's clock), read at most once a minute. computer.uptime() counts
+-- game ticks, so it runs slow while the server lags and stops while the chunk is unloaded:
+-- "2 hours" between reminders could take far longer. Reading the clock writes a file,
+-- hence once a minute. Without a readable clock the uptime is used.
+local clockValue, clockReadAt = nil, nil
+local function realNow(now)
+    if not clockReadAt or now - clockReadAt >= 60 then
+        clockValue = realTime() or clockValue
+        clockReadAt = now
+    end
+    return clockValue or now
 end
 
 -- Current time for the embeds, e.g. "2026-10-29T14:02:11Z" (nil without a real clock)
@@ -514,6 +527,11 @@ Discord.cycle = guarded(function(entries, statuses)
     end
 
     local newFailures, reminders, recovered = {}, {}, {}
+    local real -- real time, only read when something needs it
+    local function clock()
+        real = real or realNow(now)
+        return real
+    end
     local listed = {}
     local anyMarked = false
     for _, entry in ipairs(entries) do
@@ -527,20 +545,20 @@ Discord.cycle = guarded(function(entries, statuses)
             failing[entryName] = nil -- reported as new if it is switched back on while failing
         elseif status == "retry" then
             if not state then
-                state = {since = now, reported = false}
+                state = {since = clock(), reported = false}
                 failing[entryName] = state
             end
             if not state.reported then
                 -- An entry that keeps switching between failing and working is reported
                 -- once per FLAP_COOLDOWN; until then it is checked again every cycle
                 if not lastReport[entryName] or now - lastReport[entryName] >= FLAP_COOLDOWN then
-                    state.reported, state.lastSent = true, now
+                    state.reported, state.lastSent = true, clock()
                     lastReport[entryName] = now
                     table.insert(newFailures, failureLine(entryName))
                 end
-            elseif reminder > 0 and now - state.lastSent >= reminder * 3600 then
-                state.lastSent = now
-                table.insert(reminders, failureLine(entryName) .. " (for " .. duration(now - state.since) .. ")")
+            elseif reminder > 0 and clock() - state.lastSent >= reminder * 3600 then
+                state.lastSent = clock()
+                table.insert(reminders, failureLine(entryName) .. " (for " .. duration(clock() - state.since) .. ")")
             end
         elseif state and WORKING[status] then
             if state.reported then
