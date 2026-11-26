@@ -177,13 +177,15 @@ You can change maintained items in `config.lua`. There are two blocks, `cfg.item
 
 ## Config list (web page)
 
-[**Config list**](https://willshaper.github.io/Level-Maintainer/) builds the `config.lua` entries for you in the browser:
+[**Config list**](https://willshaper-tools.github.io/Level-Maintainer/) builds the `config.lua` entries for you in the browser ([source](https://github.com/willshaper-tools/Level-Maintainer)):
 
 - Type a name and amounts (`10m`, `250k` and so on) and it writes the line, with the amounts shortened the same way.
 - Keep several lists, e.g. one per maintainer computer. They are saved in your browser.
 - Untick an entry to disable it: it stays in the list but is written commented out (`--`), so the maintainer skips it.
 - Copy one line, the lines, or a whole `config.lua`. OpenComputers cuts a paste after 1024 characters, so a longer config is copied in parts.
 - Import existing lines from a `config.lua`, export or import a backup file, or copy a share link to move a list to another browser.
+
+The page used to be at `willshaper.github.io/Level-Maintainer/`. Lists saved there stay with that address: open it once and it offers to bring them to the new one.
 
 Paste into the maintainer with E (opens `config.lua`), then Ctrl+S and Ctrl+W.
 
